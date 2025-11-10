@@ -20,11 +20,21 @@ func main() {
         log.Fatalf("Failed to load config: %v", err)
     }
 
+    log.Printf("Connecting to database: host=%s port=%s dbname=%s", 
+        cfg.DBHost, cfg.DBPort, cfg.DBName)
+
     database, err := db.Connect(cfg)
     if err != nil {
         log.Fatalf("Failed to connect to database: %v", err)
     }
     defer database.Close()
+
+    log.Printf("Database connected successfully")
+
+    // Test database connection
+    if err := database.Ping(); err != nil {
+        log.Fatalf("Failed to ping database: %v", err)
+    }
 
     str := store.NewStore(database)
 
@@ -39,6 +49,7 @@ func main() {
         log.Fatalf("Failed to start server: %v", err)
     }
 }
+
 
 func setupRouter(cfg *config.Config, str *store.Store, hub *ws.Hub) *gin.Engine {
     if cfg.Env == "production" {
