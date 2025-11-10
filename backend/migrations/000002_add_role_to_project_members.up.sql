@@ -1,0 +1,2 @@
+ALTER TABLE project_members
+ADD COLUMN role VARCHAR(50) NOT NULL DEFAULT 'member';

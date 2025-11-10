@@ -1,0 +1,2 @@
+ALTER TABLE project_members
+DROP COLUMN role;
