@@ -4,7 +4,8 @@ import { tasksAPI } from '../api/client';
 import { Task } from '../types';
 
 export default function Tasks() {
-  const { id: projectId } = useParams<{ id: string }>();
+  const params = useParams();
+  const projectId = params.id;
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,17 +14,27 @@ export default function Tasks() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('todo');
   const [priority, setPriority] = useState('medium');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const loadTasks = async () => {
+    if (!projectId) {
+      setError('Project ID is missing in the URL');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await tasksAPI.getByProject(projectId!);
-      setTasks(response.data);
-    } catch (err) {
+      setError('');
+      const response = await tasksAPI.getByProject(projectId);
+      setTasks(response.data || []);
+    } catch (err: any) {
       console.error('Failed to load tasks', err);
+      setError(err.response?.data?.error || err.message || 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -32,8 +43,13 @@ export default function Tasks() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!projectId) {
+      alert('Cannot create task: project id is missing');
+      return;
+    }
+
     try {
-      await tasksAPI.create(projectId!, {
+      await tasksAPI.create(projectId, {
         title,
         description,
         status,
@@ -44,18 +60,20 @@ export default function Tasks() {
       setStatus('todo');
       setPriority('medium');
       setShowForm(false);
-      loadTasks();
-    } catch (err) {
-      alert('Failed to create task');
+      await loadTasks();
+    } catch (err: any) {
+      console.error('Create task failed', err);
+      alert(err.response?.data?.error || err.message || 'Failed to create task');
     }
   };
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
       await tasksAPI.update(taskId, { status: newStatus });
-      loadTasks();
-    } catch (err) {
-      alert('Failed to update task');
+      await loadTasks();
+    } catch (err: any) {
+      console.error('Update task failed', err);
+      alert(err.response?.data?.error || err.message || 'Failed to update task');
     }
   };
 
@@ -64,9 +82,10 @@ export default function Tasks() {
 
     try {
       await tasksAPI.delete(taskId);
-      loadTasks();
-    } catch (err) {
-      alert('Failed to delete task');
+      await loadTasks();
+    } catch (err: any) {
+      console.error('Delete task failed', err);
+      alert(err.response?.data?.error || err.message || 'Failed to delete task');
     }
   };
 
@@ -90,6 +109,10 @@ export default function Tasks() {
           {showForm ? 'Cancel' : 'New Task'}
         </button>
       </div>
+
+      {error && (
+        <div style={{ color: 'crimson', marginBottom: '1rem' }}>{error}</div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -147,18 +170,14 @@ export default function Tasks() {
       )}
 
       <div style={styles.board}>
-        {(['todo', 'in_progress', 'done'] as const).map((status) => (
-          <div key={status} style={styles.column}>
+        {(['todo', 'in_progress', 'done'] as const).map((s) => (
+          <div key={s} style={styles.column}>
             <h2 style={styles.columnTitle}>
-              {status === 'todo'
-                ? 'To Do'
-                : status === 'in_progress'
-                ? 'In Progress'
-                : 'Done'}
-              ({groupedTasks[status].length})
+              {s === 'todo' ? 'To Do' : s === 'in_progress' ? 'In Progress' : 'Done'}
+              ({(groupedTasks as any)[s]?.length || 0})
             </h2>
 
-            {groupedTasks[status].map((task) => (
+            {((groupedTasks as any)[s] || []).map((task: Task) => (
               <div key={task.id} style={styles.taskCard}>
                 <h3>{task.title}</h3>
                 <p style={styles.description}>{task.description}</p>
@@ -179,12 +198,12 @@ export default function Tasks() {
                 </div>
 
                 <div style={styles.taskActions}>
-                  {status !== 'todo' && (
+                  {s !== 'todo' && (
                     <button
                       onClick={() =>
                         handleStatusChange(
                           task.id,
-                          status === 'in_progress' ? 'todo' : 'in_progress'
+                          s === 'in_progress' ? 'todo' : 'in_progress'
                         )
                       }
                       style={styles.moveButton}
@@ -192,12 +211,12 @@ export default function Tasks() {
                       ← Move Back
                     </button>
                   )}
-                  {status !== 'done' && (
+                  {s !== 'done' && (
                     <button
                       onClick={() =>
                         handleStatusChange(
                           task.id,
-                          status === 'todo' ? 'in_progress' : 'done'
+                          s === 'todo' ? 'in_progress' : 'done'
                         )
                       }
                       style={styles.moveButton}

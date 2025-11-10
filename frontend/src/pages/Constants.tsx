@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { constantsAPI } from '../api/client';
 import { Constant } from '../types';
+import 'katex/dist/katex.min.css';
+import { InlineMath } from 'react-katex';
 
 export default function Constants() {
   const [constants, setConstants] = useState<Constant[]>([]);
@@ -20,7 +22,7 @@ export default function Constants() {
   const loadConstants = async () => {
     try {
       const response = await constantsAPI.getAll();
-      setConstants(response.data);
+      setConstants(response.data || []);
     } catch (err) {
       console.error('Failed to load constants', err);
     } finally {
@@ -57,25 +59,38 @@ export default function Constants() {
     setShowForm(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this constant?')) return;
-
-    try {
-      await constantsAPI.delete(id);
-      loadConstants();
-    } catch (err) {
-      alert('Failed to delete constant');
+  // Формат отображения значения константы: читаемый формат или экспоненциальный
+  const formatValue = (raw: string) => {
+    if (!raw) return '';
+    const v = Number(raw);
+    if (!Number.isFinite(v)) return raw;
+    const abs = Math.abs(v);
+    // Используем экспоненциальную нотацию для очень больших/малых чисел
+    if ((abs !== 0 && (abs >= 1e6 || abs < 1e-3))) {
+      return v.toExponential(3);
     }
+    // Иначе отображаем с разделителями по локали и до 6 знаков после запятой
+    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 6 }).format(v);
   };
 
-  if (loading) return <div>Loading...</div>;
+  // Преобразовать строку единиц типа "m^3·kg^-1·s^-2" в LaTeX: "m^{3} \cdot kg^{-1} \cdot s^{-2}"
+  const unitToLatex = (raw: string) => {
+    if (!raw) return '';
+    // Заменим символ средней точки на \cdot
+    let s = raw.replace(/\u00B7|·/g, ' \\cdot ');
+    // Преобразуем степени вида ^3 или ^-1 в ^{3} / ^{-1}, но оставим уже в { } как есть
+    s = s.replace(/\^(?!\{)(-?\d+)/g, '^{$1}');
+    return s;
+  };
+
+  if (loading) return <div>Загрузка...</div>;
 
   return (
     <div>
       <div style={styles.header}>
-        <h1>Physical Constants</h1>
+        <h1>Константы</h1>
         <button onClick={() => setShowForm(!showForm)} style={styles.button}>
-          {showForm ? 'Cancel' : 'New Constant'}
+          {showForm ? 'Отмена' : 'Новая константа'}
         </button>
       </div>
 
@@ -83,57 +98,57 @@ export default function Constants() {
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.row}>
             <div style={styles.field}>
-              <label>Name</label>
+              <label>Название</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., Speed of Light"
+                placeholder="например: Скорость света"
               />
             </div>
 
             <div style={styles.field}>
-              <label>Symbol</label>
+              <label>Обозначение</label>
               <input
                 type="text"
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., c"
+                placeholder="например: c"
               />
             </div>
           </div>
 
           <div style={styles.row}>
             <div style={styles.field}>
-              <label>Value</label>
+              <label>Значение</label>
               <input
                 type="text"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., 299792458"
+                placeholder="например: 299792458"
               />
             </div>
 
             <div style={styles.field}>
-              <label>Unit</label>
+              <label>Единицы</label>
               <input
                 type="text"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
                 style={styles.input}
-                placeholder="e.g., m/s"
+                placeholder="например: м/с"
               />
             </div>
           </div>
 
           <div style={styles.field}>
-            <label>Description</label>
+            <label>Описание</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -143,18 +158,18 @@ export default function Constants() {
           </div>
 
           <div style={styles.field}>
-            <label>Scope</label>
+            <label>Видимость</label>
             <select
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               style={styles.input}
             >
-              <option value="user">User (Private)</option>
-              <option value="global">Global (Public)</option>
+              <option value="user">Личная</option>
+              <option value="global">Общая</option>
             </select>
           </div>
 
-          <button type="submit" style={styles.button}>Create Constant</button>
+          <button type="submit" style={styles.button}>Создать константу</button>
         </form>
       )}
 
@@ -170,35 +185,33 @@ export default function Constants() {
                     constant.scope === 'global' ? '#27ae60' : '#95a5a6',
                 }}
               >
-                {constant.scope}
+                {constant.scope === 'global' ? 'Общая' : 'Личная'}
               </span>
             </div>
 
             <div style={styles.formula}>
               <span style={styles.symbol}>{constant.symbol}</span>
               <span> = </span>
-              <span style={styles.value}>{constant.value}</span>
-              {constant.unit && <span style={styles.unit}> {constant.unit}</span>}
+              <span style={styles.value}>{formatValue(constant.value)}</span>
+              {constant.unit && (
+                <span style={styles.unit}>
+                  {' '}
+                  <InlineMath math={unitToLatex(constant.unit)} />
+                </span>
+              )}
             </div>
 
             {constant.description && (
               <p style={styles.description}>{constant.description}</p>
             )}
 
-            <div style={styles.actions}>
-              <button
-                onClick={() => handleDelete(constant.id)}
-                style={styles.deleteButton}
-              >
-                Delete
-              </button>
-            </div>
+            {/* Deletion is intentionally disabled in the UI per requirement */}
           </div>
         ))}
       </div>
 
       {constants.length === 0 && (
-        <p style={styles.empty}>No constants yet. Add your first constant!</p>
+        <p style={styles.empty}>Пока нет констант. Добавьте первую!</p>
       )}
     </div>
   );
