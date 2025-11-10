@@ -3,6 +3,7 @@ package handlers
 import (
     "net/http"
     "time"
+	"fmt"
 
     "github.com/gin-gonic/gin"
     "github.com/google/uuid"
@@ -18,11 +19,11 @@ func GetTasks(s *store.Store) gin.HandlerFunc {
             return
         }
 
-        projectID, err := uuid.Parse(c.Param("projectId"))
+        projectID, err := uuid.Parse(c.Param("id"))
         if err != nil {
             c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
             return
-        }
+        } 
 
         
         isMember, err := s.IsProjectMember(projectID, userID)
@@ -47,14 +48,17 @@ func GetTasks(s *store.Store) gin.HandlerFunc {
 
 func CreateTask(s *store.Store) gin.HandlerFunc {
     return func(c *gin.Context) {
+		fmt.Println("Create task")
         userID, err := getUserID(c)
         if err != nil {
+			fmt.Printf("Error while getting user id : %w\n", err)
             c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
             return
         }
 
-        projectID, err := uuid.Parse(c.Param("projectId"))
+        projectID, err := uuid.Parse(c.Param("id"))
         if err != nil {
+			fmt.Printf("Error while getting project id : %w\n", err)
             c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
             return
         }
@@ -62,6 +66,7 @@ func CreateTask(s *store.Store) gin.HandlerFunc {
         
         isMember, err := s.IsProjectMember(projectID, userID)
         if err != nil {
+			fmt.Printf("Error while checking is project member : %w\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
             return
         }

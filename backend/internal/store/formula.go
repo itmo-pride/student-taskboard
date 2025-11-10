@@ -24,19 +24,19 @@ func (s *Store) CreateFormula(formula *models.Formula) error {
 
 func (s *Store) GetFormulas(userID uuid.UUID, projectID *uuid.UUID) ([]models.Formula, error) {
     var formulas []models.Formula
-    
     query := `
         SELECT * FROM formulas 
-        WHERE created_by = $1 OR project_id = $2
+        WHERE created_by = $1
+           OR project_id = $2
+           OR created_by = (SELECT id FROM users WHERE email = 'physics-constants@system.local')
         ORDER BY created_at DESC
     `
-    
-    err := s.db.Select(&formulas, query, userID, projectID)
-    if err != nil {
+    if err := s.db.Select(&formulas, query, userID, projectID); err != nil {
         return nil, fmt.Errorf("failed to get formulas: %w", err)
     }
     return formulas, nil
 }
+
 
 func (s *Store) GetFormulaByID(id uuid.UUID) (*models.Formula, error) {
     var formula models.Formula
