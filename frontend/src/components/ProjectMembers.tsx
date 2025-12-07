@@ -1,20 +1,27 @@
 import { useState, useEffect } from 'react';
 import { projectsAPI, usersAPI } from '../api/client';
-import { ProjectMember, User } from '../types';
+import { ProjectMember, User, ProjectRole } from '../types';
 
 interface Props {
   projectId: string;
-  isOwner: boolean;
+  currentUserRole: ProjectRole;
+  onOwnershipTransferred?: () => void;
 }
 
-export default function ProjectMembers({ projectId, isOwner }: Props) {
+export default function ProjectMembers({ projectId, currentUserRole, onOwnershipTransferred }: Props) {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null);
+
+  const isOwner = currentUserRole === 'owner';
+  const isAdmin = currentUserRole === 'admin';
+  const canManageMembers = isOwner;
 
   useEffect(() => {
     loadMembers();
@@ -76,6 +83,44 @@ export default function ProjectMembers({ projectId, isOwner }: Props) {
     }
   };
 
+  const handleRoleChange = async (userId: string, newRole: 'admin' | 'member') => {
+    try {
+      await projectsAPI.updateMemberRole(projectId, userId, newRole);
+      loadMembers();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to update role');
+    }
+  };
+
+  const handleTransferOwnership = async () => {
+    if (!transferTarget) return;
+    
+    if (!confirm(`Are you sure you want to transfer ownership to ${transferTarget.user_name}? You will become an admin.`)) {
+      return;
+    }
+
+    try {
+      await projectsAPI.transferOwnership(projectId, transferTarget.user_id);
+      setShowTransferModal(false);
+      setTransferTarget(null);
+      loadMembers();
+      onOwnershipTransferred?.();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to transfer ownership');
+    }
+  };
+
+  const getRoleBadgeStyle = (role: ProjectRole) => {
+    switch (role) {
+      case 'owner':
+        return { backgroundColor: '#f39c12', icon: '👑' };
+      case 'admin':
+        return { backgroundColor: '#9b59b6', icon: '⚡' };
+      default:
+        return { backgroundColor: '#95a5a6', icon: '👤' };
+    }
+  };
+
   if (loading) return <div style={styles.loading}>Loading members...</div>;
 
   return (
@@ -84,7 +129,7 @@ export default function ProjectMembers({ projectId, isOwner }: Props) {
         <h3 style={styles.title}>
           👥 Team Members ({members.length})
         </h3>
-        {isOwner && (
+        {canManageMembers && (
           <button 
             onClick={() => setShowAddForm(!showAddForm)} 
             style={styles.addButton}
@@ -92,6 +137,18 @@ export default function ProjectMembers({ projectId, isOwner }: Props) {
             {showAddForm ? 'Cancel' : '+ Add Member'}
           </button>
         )}
+      </div>
+
+      <div style={styles.legend}>
+        <span style={styles.legendItem}>
+          <span style={{...styles.legendBadge, backgroundColor: '#f39c12'}}>👑 Owner</span>
+        </span>
+        <span style={styles.legendItem}>
+          <span style={{...styles.legendBadge, backgroundColor: '#9b59b6'}}>⚡ Admin</span>
+        </span>
+        <span style={styles.legendItem}>
+          <span style={{...styles.legendBadge, backgroundColor: '#95a5a6'}}>👤 Member</span>
+        </span>
       </div>
 
       {showAddForm && (
@@ -133,35 +190,91 @@ export default function ProjectMembers({ projectId, isOwner }: Props) {
       )}
 
       <div style={styles.membersList}>
-        {members.map((member) => (
-          <div key={member.id} style={styles.memberCard}>
-            <div style={styles.avatar}>
-              {member.user_name.charAt(0).toUpperCase()}
-            </div>
-            <div style={styles.memberInfo}>
-              <div style={styles.memberName}>
-                {member.user_name}
-                {member.role === 'owner' && (
-                  <span style={styles.ownerBadge}>Owner</span>
-                )}
+        {members.map((member) => {
+          const badgeStyle = getRoleBadgeStyle(member.role);
+          
+          return (
+            <div key={member.id} style={styles.memberCard}>
+              <div style={styles.avatar}>
+                {member.user_name.charAt(0).toUpperCase()}
               </div>
-              <div style={styles.memberEmail}>{member.user_email}</div>
-              <div style={styles.joinedAt}>
-                Joined {new Date(member.joined_at).toLocaleDateString()}
+              
+              <div style={styles.memberInfo}>
+                <div style={styles.memberName}>
+                  {member.user_name}
+                  <span style={{...styles.roleBadge, backgroundColor: badgeStyle.backgroundColor}}>
+                    {badgeStyle.icon} {member.role}
+                  </span>
+                </div>
+                <div style={styles.memberEmail}>{member.user_email}</div>
+                <div style={styles.joinedAt}>
+                  Joined {new Date(member.joined_at).toLocaleDateString()}
+                </div>
               </div>
+
+              {isOwner && member.role !== 'owner' && (
+                <div style={styles.memberActions}>
+                  <select
+                    value={member.role}
+                    onChange={(e) => handleRoleChange(member.user_id, e.target.value as 'admin' | 'member')}
+                    style={styles.roleSelect}
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  
+                  <button
+                    onClick={() => {
+                      setTransferTarget(member);
+                      setShowTransferModal(true);
+                    }}
+                    style={styles.transferButton}
+                    title="Transfer ownership"
+                  >
+                    👑
+                  </button>
+                  
+                  <button
+                    onClick={() => handleRemoveMember(member.user_id, member.user_name)}
+                    style={styles.removeButton}
+                    title="Remove from project"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </div>
-            {isOwner && member.role !== 'owner' && (
-              <button
-                onClick={() => handleRemoveMember(member.user_id, member.user_name)}
-                style={styles.removeButton}
-                title="Remove from project"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {showTransferModal && transferTarget && (
+        <div style={styles.modalBackdrop} onClick={() => setShowTransferModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={styles.modalTitle}>⚠️ Transfer Ownership</h3>
+            <p style={styles.modalText}>
+              You are about to transfer ownership of this project to <strong>{transferTarget.user_name}</strong>.
+            </p>
+            <p style={styles.modalWarning}>
+              This action will make you an admin. Only the new owner can transfer ownership back.
+            </p>
+            <div style={styles.modalActions}>
+              <button 
+                onClick={() => setShowTransferModal(false)}
+                style={styles.cancelButton}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleTransferOwnership}
+                style={styles.confirmButton}
+              >
+                Transfer Ownership
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -177,12 +290,27 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '1rem',
+    marginBottom: '0.75rem',
   },
   title: {
     margin: 0,
     fontSize: '1.1rem',
     color: '#2c3e50',
+  },
+  legend: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginBottom: '1rem',
+    flexWrap: 'wrap',
+  },
+  legendItem: {
+    fontSize: '0.75rem',
+  },
+  legendBadge: {
+    padding: '0.2rem 0.5rem',
+    borderRadius: '4px',
+    color: 'white',
+    fontSize: '0.7rem',
   },
   addButton: {
     padding: '0.5rem 1rem',
@@ -281,31 +409,61 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     fontWeight: 'bold',
     fontSize: '1.1rem',
+    flexShrink: 0,
   },
   memberInfo: {
     flex: 1,
+    minWidth: 0,
   },
   memberName: {
     fontWeight: 500,
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
+    flexWrap: 'wrap',
   },
-  ownerBadge: {
-    backgroundColor: '#f39c12',
-    color: 'white',
+  roleBadge: {
     padding: '0.15rem 0.5rem',
     borderRadius: '4px',
     fontSize: '0.7rem',
-    textTransform: 'uppercase',
+    color: 'white',
+    textTransform: 'capitalize',
   },
   memberEmail: {
     fontSize: '0.85rem',
     color: '#666',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   joinedAt: {
     fontSize: '0.75rem',
     color: '#999',
+  },
+  memberActions: {
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  roleSelect: {
+    padding: '0.3rem 0.5rem',
+    borderRadius: '4px',
+    border: '1px solid #ddd',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+  },
+  transferButton: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '50%',
+    border: 'none',
+    backgroundColor: '#f39c12',
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeButton: {
     width: '30px',
@@ -319,5 +477,63 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  modalBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modal: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '1.5rem',
+    maxWidth: '400px',
+    width: '90%',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+  },
+  modalTitle: {
+    margin: '0 0 1rem 0',
+    color: '#e67e22',
+  },
+  modalText: {
+    color: '#333',
+    marginBottom: '0.5rem',
+  },
+  modalWarning: {
+    color: '#e74c3c',
+    fontSize: '0.9rem',
+    backgroundColor: '#ffeaea',
+    padding: '0.75rem',
+    borderRadius: '6px',
+    marginBottom: '1rem',
+  },
+  modalActions: {
+    display: 'flex',
+    gap: '0.75rem',
+    justifyContent: 'flex-end',
+  },
+  cancelButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#95a5a6',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  confirmButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#e74c3c',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
   },
 };

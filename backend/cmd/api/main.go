@@ -91,6 +91,10 @@ func setupRouter(cfg *config.Config, str *store.Store, hub *ws.Hub) *gin.Engine 
 			protected.POST("/projects/:id/members", handlers.AddProjectMember(str))
 			protected.DELETE("/projects/:id/members/:userId", handlers.RemoveProjectMember(str))
 
+			protected.POST("/projects/:id/transfer-ownership", handlers.TransferOwnership(str))
+			protected.PUT("/projects/:id/members/:userId/role", handlers.UpdateMemberRole(str))
+			protected.GET("/projects/:id/my-role", handlers.GetMyRole(str))
+
 			protected.GET("/users/search", handlers.SearchUsers(str))
 
 			protected.GET("/projects/:id/tasks", handlers.GetTasks(str))
