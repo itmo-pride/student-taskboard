@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { CreateProjectRequest, Project } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -57,7 +58,7 @@ export const authAPI = {
 export const projectsAPI = {
   getAll: () => apiClient.get('/projects'),
   getById: (id: string) => apiClient.get(`/projects/${id}`),
-  create: (data: any) => apiClient.post('/projects', data),
+  create: (data: CreateProjectRequest) => apiClient.post<Project>('/projects', data),
   update: (id: string, data: any) => apiClient.put(`/projects/${id}`, data),
   delete: (id: string) => apiClient.delete(`/projects/${id}`),
   addMember: (projectId: string, userId: string) => 
