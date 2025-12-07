@@ -6,8 +6,7 @@ import Register from './pages/Register';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Tasks from './pages/Tasks';
-import Constants from './pages/Constants';
-import Formulas from './pages/Formulas';
+import BoardPage from './pages/BoardPage';
 
 export default function App() {
   return (
@@ -17,10 +16,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         
         <Route element={<Layout />}>
-          <Route
-            path="/"
-            element={<Navigate to="/projects" replace />}
-          />
+          <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route
             path="/projects"
             element={
@@ -46,18 +42,10 @@ export default function App() {
             }
           />
           <Route
-            path="/constants"
+            path="/boards/:boardId"
             element={
               <PrivateRoute>
-                <Constants />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/formulas"
-            element={
-              <PrivateRoute>
-                <Formulas />
+                <BoardPage />
               </PrivateRoute>
             }
           />

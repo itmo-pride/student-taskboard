@@ -121,3 +121,54 @@ export const formulasAPI = {
   update: (id: string, data: any) => apiClient.put(`/formulas/${id}`, data),
   delete: (id: string) => apiClient.delete(`/formulas/${id}`),
 };
+
+// Boards API
+export interface Board {
+  id: string;
+  project_id: string;
+  name: string;
+  data: BoardData;
+  settings: BoardSettings;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BoardData {
+  objects: DrawObject[];
+  version: number;
+}
+
+export interface BoardSettings {
+  backgroundColor: string;
+}
+
+export interface DrawObject {
+  id: string;
+  type: 'path' | 'line' | 'rect' | 'circle' | 'text';
+  points?: { x: number; y: number }[];
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  text?: string;
+  color: string;
+  lineWidth: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export const boardsAPI = {
+  getByProject: (projectId: string) => 
+    apiClient.get<Board[]>(`/projects/${projectId}/boards`),
+  getById: (boardId: string) => 
+    apiClient.get<Board>(`/boards/${boardId}`),
+  create: (projectId: string, name: string) => 
+    apiClient.post<Board>(`/projects/${projectId}/boards`, { name }),
+  update: (boardId: string, name: string) => 
+    apiClient.put<Board>(`/boards/${boardId}`, { name }),
+  delete: (boardId: string) => 
+    apiClient.delete(`/boards/${boardId}`),
+  clear: (boardId: string) => 
+    apiClient.post(`/boards/${boardId}/clear`),
+};

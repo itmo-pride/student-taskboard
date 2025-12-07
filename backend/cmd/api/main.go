@@ -20,24 +20,15 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	log.Printf("Connecting to database: host=%s port=%s dbname=%s",
-		cfg.DBHost, cfg.DBPort, cfg.DBName)
-
 	database, err := db.Connect(cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
 
-	log.Printf("Database connected successfully")
-
-	if err := database.Ping(); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
-	}
-
 	str := store.NewStore(database)
 
-	hub := ws.NewHub()
+	hub := ws.NewHub(str)
 	go hub.Run()
 
 	router := setupRouter(cfg, str, hub)
@@ -90,10 +81,16 @@ func setupRouter(cfg *config.Config, str *store.Store, hub *ws.Hub) *gin.Engine 
 			protected.GET("/projects/:id/members", handlers.GetProjectMembers(str))
 			protected.POST("/projects/:id/members", handlers.AddProjectMember(str))
 			protected.DELETE("/projects/:id/members/:userId", handlers.RemoveProjectMember(str))
-
 			protected.POST("/projects/:id/transfer-ownership", handlers.TransferOwnership(str))
 			protected.PUT("/projects/:id/members/:userId/role", handlers.UpdateMemberRole(str))
 			protected.GET("/projects/:id/my-role", handlers.GetMyRole(str))
+
+			protected.GET("/projects/:id/boards", handlers.GetBoards(str))
+			protected.POST("/projects/:id/boards", handlers.CreateBoard(str))
+			protected.GET("/boards/:boardId", handlers.GetBoard(str))
+			protected.PUT("/boards/:boardId", handlers.UpdateBoardName(str))
+			protected.DELETE("/boards/:boardId", handlers.DeleteBoard(str))
+			protected.POST("/boards/:boardId/clear", handlers.ClearBoardHandler(str))
 
 			protected.GET("/users/search", handlers.SearchUsers(str))
 
@@ -119,7 +116,6 @@ func setupRouter(cfg *config.Config, str *store.Store, hub *ws.Hub) *gin.Engine 
 			protected.GET("/attachments/:id", handlers.GetAttachment(str))
 			protected.DELETE("/attachments/:id", handlers.DeleteAttachment(str, cfg))
 		}
-
 	}
 
 	r.GET("/ws/boards/:boardId", handlers.AuthMiddlewareWS(cfg), handlers.ServeWS(hub))

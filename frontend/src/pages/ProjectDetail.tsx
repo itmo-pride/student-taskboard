@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { projectsAPI } from '../api/client';
 import { Project, ProjectRole } from '../types';
 import ProjectMembers from '../components/ProjectMembers';
+import BoardList from '../components/BoardList';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -12,12 +13,11 @@ export default function ProjectDetail() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  
+
   const [myRole, setMyRole] = useState<ProjectRole>('member');
   const [roleLoading, setRoleLoading] = useState(true);
 
   const isOwner = myRole === 'owner';
-  const isAdmin = myRole === 'admin';
   const canEdit = isOwner;
 
   useEffect(() => {
@@ -101,7 +101,9 @@ export default function ProjectDetail() {
                 </div>
 
                 <div style={styles.actions}>
-                  <button type="submit" style={styles.button}>Save</button>
+                  <button type="submit" style={styles.button}>
+                    Save
+                  </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
@@ -116,16 +118,24 @@ export default function ProjectDetail() {
                 <div style={styles.header}>
                   <div>
                     <h1>{project.name}</h1>
-                    <span style={{
-                      ...styles.myRoleBadge,
-                      backgroundColor: myRole === 'owner' ? '#f39c12' : myRole === 'admin' ? '#9b59b6' : '#95a5a6'
-                    }}>
-                      {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} You are {myRole}
+                    <span
+                      style={{
+                        ...styles.myRoleBadge,
+                        backgroundColor:
+                          myRole === 'owner'
+                            ? '#f39c12'
+                            : myRole === 'admin'
+                            ? '#9b59b6'
+                            : '#95a5a6',
+                      }}
+                    >
+                      {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} You are{' '}
+                      {myRole}
                     </span>
                   </div>
                   <div style={styles.headerActions}>
-                    <button 
-                      onClick={() => navigate(`/projects/${id}/tasks`)} 
+                    <button
+                      onClick={() => navigate(`/projects/${id}/tasks`)}
                       style={styles.tasksButton}
                     >
                       📋 View Tasks
@@ -148,11 +158,13 @@ export default function ProjectDetail() {
         </div>
 
         <div style={styles.sidebar}>
-          <ProjectMembers 
-            projectId={id!} 
+          <ProjectMembers
+            projectId={id!}
             currentUserRole={myRole}
             onOwnershipTransferred={handleOwnershipTransferred}
           />
+          
+          <BoardList projectId={id!} currentUserRole={myRole} />
         </div>
       </div>
     </div>
@@ -185,6 +197,9 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   sidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
     position: 'sticky',
     top: '1rem',
   },
