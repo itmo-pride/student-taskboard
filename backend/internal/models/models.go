@@ -83,15 +83,6 @@ type Attachment struct {
     CreatedAt    time.Time  `json:"created_at" db:"created_at"`
 }
 
-type Board struct {
-    ID        uuid.UUID  `json:"id" db:"id"`
-    ProjectID uuid.UUID  `json:"project_id" db:"project_id"`
-    Name      string     `json:"name" db:"name"`
-    Data      string     `json:"data" db:"data"`
-    CreatedAt time.Time  `json:"created_at" db:"created_at"`
-    UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
-}
-
 type SignUpRequest struct {
     Email    string `json:"email" binding:"required,email"`
     Password string `json:"password" binding:"required,min=6"`
