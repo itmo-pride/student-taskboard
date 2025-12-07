@@ -357,3 +357,150 @@ func RemoveProjectMember(s *store.Store) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "member removed"})
 	}
 }
+
+func TransferOwnership(s *store.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := getUserID(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		projectID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		var req struct {
+			NewOwnerID string `json:"new_owner_id" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		newOwnerID, err := uuid.Parse(req.NewOwnerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid new owner id"})
+			return
+		}
+
+		project, err := s.GetProjectByID(projectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		if project == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+			return
+		}
+
+		if project.OwnerID != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only owner can transfer ownership"})
+			return
+		}
+
+		if userID == newOwnerID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot transfer ownership to yourself"})
+			return
+		}
+
+		if err := s.TransferOwnership(projectID, userID, newOwnerID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ownership transferred successfully"})
+	}
+}
+
+func UpdateMemberRole(s *store.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := getUserID(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		projectID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		memberUserID, err := uuid.Parse(c.Param("userId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+			return
+		}
+
+		var req struct {
+			Role string `json:"role" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if req.Role != "admin" && req.Role != "member" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "role must be 'admin' or 'member'"})
+			return
+		}
+
+		project, err := s.GetProjectByID(projectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		if project == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+			return
+		}
+
+		if project.OwnerID != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only owner can change member roles"})
+			return
+		}
+
+		if userID == memberUserID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot change your own role"})
+			return
+		}
+
+		if err := s.UpdateMemberRole(projectID, memberUserID, req.Role); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "role updated successfully"})
+	}
+}
+
+func GetMyRole(s *store.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := getUserID(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		projectID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		role, err := s.GetMemberRole(projectID, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		if role == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this project"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"role": role})
+	}
+}

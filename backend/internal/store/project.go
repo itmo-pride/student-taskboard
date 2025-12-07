@@ -151,3 +151,81 @@ func (s *Store) RemoveProjectMember(projectID, userID uuid.UUID) error {
 	}
 	return nil
 }
+
+func (s *Store) GetMemberRole(projectID, userID uuid.UUID) (string, error) {
+	var role string
+	query := `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`
+	err := s.db.Get(&role, query, projectID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get member role: %w", err)
+	}
+	return role, nil
+}
+
+func (s *Store) UpdateMemberRole(projectID, userID uuid.UUID, newRole string) error {
+	query := `
+        UPDATE project_members 
+        SET role = $1 
+        WHERE project_id = $2 AND user_id = $3 AND role != 'owner'
+    `
+	result, err := s.db.Exec(query, newRole, projectID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update member role: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("member not found or cannot change owner role")
+	}
+
+	return nil
+}
+
+func (s *Store) TransferOwnership(projectID, currentOwnerID, newOwnerID uuid.UUID) error {
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var currentRole string
+	err = tx.Get(&currentRole, `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`, projectID, currentOwnerID)
+	if err != nil {
+		return fmt.Errorf("failed to verify current owner: %w", err)
+	}
+	if currentRole != "owner" {
+		return fmt.Errorf("only owner can transfer ownership")
+	}
+
+	var newOwnerExists bool
+	err = tx.Get(&newOwnerExists, `SELECT EXISTS(SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2)`, projectID, newOwnerID)
+	if err != nil {
+		return fmt.Errorf("failed to check new owner membership: %w", err)
+	}
+	if !newOwnerExists {
+		return fmt.Errorf("new owner must be a project member")
+	}
+
+	_, err = tx.Exec(`UPDATE project_members SET role = 'admin' WHERE project_id = $1 AND user_id = $2`, projectID, currentOwnerID)
+	if err != nil {
+		return fmt.Errorf("failed to demote current owner: %w", err)
+	}
+
+	_, err = tx.Exec(`UPDATE project_members SET role = 'owner' WHERE project_id = $1 AND user_id = $2`, projectID, newOwnerID)
+	if err != nil {
+		return fmt.Errorf("failed to promote new owner: %w", err)
+	}
+
+	_, err = tx.Exec(`UPDATE projects SET owner_id = $1, updated_at = $2 WHERE id = $3`, newOwnerID, time.Now(), projectID)
+	if err != nil {
+		return fmt.Errorf("failed to update project owner: %w", err)
+	}
+
+	return tx.Commit()
+}
