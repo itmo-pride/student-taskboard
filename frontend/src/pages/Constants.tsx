@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { constantsAPI } from '../api/client';
 import { Constant } from '../types';
+import LatexRenderer from '../components/LatexRenderer';
 
 export default function Constants() {
   const [constants, setConstants] = useState<Constant[]>([]);
@@ -30,16 +31,8 @@ export default function Constants() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
-      await constantsAPI.create({
-        name,
-        symbol,
-        value,
-        unit,
-        description,
-        scope,
-      });
+      await constantsAPI.create({ name, symbol, value, unit, description, scope });
       resetForm();
       loadConstants();
     } catch (err) {
@@ -58,17 +51,37 @@ export default function Constants() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this constant?')) return;
-
+    if (!confirm('Are you sure?')) return;
     try {
       await constantsAPI.delete(id);
       loadConstants();
     } catch (err) {
-      alert('Failed to delete constant');
+      alert('Failed to delete');
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  const formatConstantLatex = (c: Constant): string => {
+    let latex = `${c.symbol} = ${c.value}`;
+    if (c.unit) {
+      const formattedUnit = formatUnit(c.unit);
+      latex += `\\,\\mathrm{${formattedUnit}}`;
+    }
+    return latex;
+  };
+
+  const formatUnit = (unit: string): string => {
+    return unit
+      .replace(/\^(-?\d+)/g, '^{$1}')
+      .replace(/·/g, '\\cdot ')
+      .replace(/\*/g, '\\cdot ')
+      .replace(/\//g, '/')
+      .replace(/mol/g, 'mol')
+      .replace(/kg/g, 'kg')
+      .replace(/m/g, 'm')
+      .replace(/s/g, 's');
+  };
+
+  if (loading) return <div style={styles.loading}>Loading constants...</div>;
 
   return (
     <div>
@@ -93,16 +106,15 @@ export default function Constants() {
                 placeholder="e.g., Speed of Light"
               />
             </div>
-
             <div style={styles.field}>
-              <label>Symbol</label>
+              <label>Symbol (LaTeX)</label>
               <input
                 type="text"
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., c"
+                placeholder="e.g., c, \hbar, \epsilon_0"
               />
             </div>
           </div>
@@ -116,10 +128,9 @@ export default function Constants() {
                 onChange={(e) => setValue(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., 299792458"
+                placeholder="e.g., 2.998 \times 10^8"
               />
             </div>
-
             <div style={styles.field}>
               <label>Unit</label>
               <input
@@ -127,10 +138,23 @@ export default function Constants() {
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
                 style={styles.input}
-                placeholder="e.g., m/s"
+                placeholder="e.g., m/s, J·s, kg"
               />
             </div>
           </div>
+
+          {/* Предпросмотр */}
+          {(symbol || value) && (
+            <div style={styles.preview}>
+              <label>Preview:</label>
+              <div style={styles.previewBox}>
+                <LatexRenderer 
+                  math={formatConstantLatex({ symbol, value, unit } as Constant)} 
+                  block 
+                />
+              </div>
+            </div>
+          )}
 
           <div style={styles.field}>
             <label>Description</label>
@@ -144,11 +168,7 @@ export default function Constants() {
 
           <div style={styles.field}>
             <label>Scope</label>
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              style={styles.input}
-            >
+            <select value={scope} onChange={(e) => setScope(e.target.value)} style={styles.input}>
               <option value="user">User (Private)</option>
               <option value="global">Global (Public)</option>
             </select>
@@ -161,24 +181,21 @@ export default function Constants() {
       <div style={styles.grid}>
         {constants.map((constant) => (
           <div key={constant.id} style={styles.card}>
-            <div style={styles.constantHeader}>
-              <h3>{constant.name}</h3>
+            <div style={styles.cardHeader}>
+              <h3 style={styles.cardTitle}>{constant.name}</h3>
               <span
                 style={{
                   ...styles.scopeBadge,
-                  backgroundColor:
-                    constant.scope === 'global' ? '#27ae60' : '#95a5a6',
+                  backgroundColor: constant.scope === 'global' ? '#27ae60' : '#95a5a6',
                 }}
               >
                 {constant.scope}
               </span>
             </div>
 
-            <div style={styles.formula}>
-              <span style={styles.symbol}>{constant.symbol}</span>
-              <span> = </span>
-              <span style={styles.value}>{constant.value}</span>
-              {constant.unit && <span style={styles.unit}> {constant.unit}</span>}
+            {/* Красивый LaTeX рендеринг */}
+            <div style={styles.formulaBox}>
+              <LatexRenderer math={formatConstantLatex(constant)} block />
             </div>
 
             {constant.description && (
@@ -186,10 +203,7 @@ export default function Constants() {
             )}
 
             <div style={styles.actions}>
-              <button
-                onClick={() => handleDelete(constant.id)}
-                style={styles.deleteButton}
-              >
+              <button onClick={() => handleDelete(constant.id)} style={styles.deleteButton}>
                 Delete
               </button>
             </div>
@@ -205,6 +219,11 @@ export default function Constants() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  loading: {
+    textAlign: 'center',
+    padding: '2rem',
+    color: '#666',
+  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -218,6 +237,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
+    fontSize: '1rem',
   },
   form: {
     backgroundColor: 'white',
@@ -242,51 +262,73 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '1rem',
     marginTop: '0.25rem',
   },
+  preview: {
+    marginBottom: '1rem',
+    padding: '1rem',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px',
+    border: '1px dashed #ddd',
+  },
+  previewBox: {
+    marginTop: '0.5rem',
+    padding: '1rem',
+    backgroundColor: 'white',
+    borderRadius: '4px',
+    minHeight: '50px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
     gap: '1rem',
   },
   card: {
     backgroundColor: 'white',
     padding: '1.5rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
   },
-  constantHeader: {
+  cardHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: '1rem',
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: '1.1rem',
+    color: '#2c3e50',
   },
   scopeBadge: {
     padding: '0.25rem 0.75rem',
     borderRadius: '12px',
-    fontSize: '0.8rem',
+    fontSize: '0.75rem',
     color: 'white',
+    fontWeight: 500,
   },
-  formula: {
-    fontSize: '1.2rem',
-    marginBottom: '0.5rem',
-    fontFamily: 'monospace',
-  },
-  symbol: {
-    fontStyle: 'italic',
-    fontWeight: 'bold',
-  },
-  value: {
-    color: '#2980b9',
-  },
-  unit: {
-    color: '#666',
+  formulaBox: {
+    backgroundColor: '#f8f9fa',
+    padding: '1.25rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    border: '1px solid #eee',
+    minHeight: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   description: {
     fontSize: '0.9rem',
     color: '#666',
-    marginTop: '0.5rem',
+    marginBottom: '1rem',
+    lineHeight: 1.5,
   },
   actions: {
-    marginTop: '1rem',
+    display: 'flex',
+    justifyContent: 'flex-end',
   },
   deleteButton: {
     padding: '0.5rem 1rem',
@@ -295,11 +337,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
   },
   empty: {
     textAlign: 'center',
     color: '#999',
-    marginTop: '2rem',
+    marginTop: '3rem',
+    fontSize: '1.1rem',
   },
 };
