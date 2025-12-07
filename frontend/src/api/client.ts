@@ -1,7 +1,16 @@
 import axios from 'axios';
-import { CreateProjectRequest, Project } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  user_name: string;
+  user_email: string;
+}
 
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
@@ -58,13 +67,26 @@ export const authAPI = {
 export const projectsAPI = {
   getAll: () => apiClient.get('/projects'),
   getById: (id: string) => apiClient.get(`/projects/${id}`),
-  create: (data: CreateProjectRequest) => apiClient.post<Project>('/projects', data),
+  create: (data: any) => apiClient.post('/projects', data),
   update: (id: string, data: any) => apiClient.put(`/projects/${id}`, data),
   delete: (id: string) => apiClient.delete(`/projects/${id}`),
+  // Members
+  getMembers: (projectId: string) => apiClient.get<ProjectMember[]>(`/projects/${projectId}/members`),
   addMember: (projectId: string, userId: string) => 
     apiClient.post(`/projects/${projectId}/members`, { user_id: userId }),
   removeMember: (projectId: string, userId: string) =>
     apiClient.delete(`/projects/${projectId}/members/${userId}`),
+};
+
+// User API
+export const usersAPI = {
+  search: (query: string, excludeProjectId?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (excludeProjectId) {
+      params.append('exclude_project', excludeProjectId);
+    }
+    return apiClient.get(`/users/search?${params.toString()}`);
+  },
 };
 
 // Tasks API

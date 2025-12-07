@@ -87,3 +87,13 @@ export interface CreateFormulaRequest {
   description: string;
   project_id?: string;
 }
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  user_name: string;
+  user_email: string;
+}
