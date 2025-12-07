@@ -6,10 +6,14 @@ export interface ProjectMember {
   id: string;
   project_id: string;
   user_id: string;
-  role: string;
+  role: 'owner' | 'admin' | 'member';
   joined_at: string;
   user_name: string;
   user_email: string;
+}
+
+export interface MyRoleResponse {
+  role: 'owner' | 'admin' | 'member';
 }
 
 const apiClient = axios.create({
@@ -19,30 +23,22 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor to add token
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('API Request:', config.method?.toUpperCase(), config.url); // Debug
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor to handle errors
 apiClient.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', response.status, response.config.url); // Debug
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('Response error:', error.response?.status, error.response?.data);
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -70,12 +66,22 @@ export const projectsAPI = {
   create: (data: any) => apiClient.post('/projects', data),
   update: (id: string, data: any) => apiClient.put(`/projects/${id}`, data),
   delete: (id: string) => apiClient.delete(`/projects/${id}`),
-  // Members
-  getMembers: (projectId: string) => apiClient.get<ProjectMember[]>(`/projects/${projectId}/members`),
+  
+  getMembers: (projectId: string) => 
+    apiClient.get<ProjectMember[]>(`/projects/${projectId}/members`),
   addMember: (projectId: string, userId: string) => 
     apiClient.post(`/projects/${projectId}/members`, { user_id: userId }),
   removeMember: (projectId: string, userId: string) =>
     apiClient.delete(`/projects/${projectId}/members/${userId}`),
+  
+  getMyRole: (projectId: string) => 
+    apiClient.get<MyRoleResponse>(`/projects/${projectId}/my-role`),
+  
+  updateMemberRole: (projectId: string, userId: string, role: 'admin' | 'member') =>
+    apiClient.put(`/projects/${projectId}/members/${userId}/role`, { role }),
+  
+  transferOwnership: (projectId: string, newOwnerId: string) =>
+    apiClient.post(`/projects/${projectId}/transfer-ownership`, { new_owner_id: newOwnerId }),
 };
 
 // User API

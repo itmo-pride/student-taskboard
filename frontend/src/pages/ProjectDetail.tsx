@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { projectsAPI } from '../api/client';
-import { Project } from '../types';
+import { Project, ProjectRole } from '../types';
 import ProjectMembers from '../components/ProjectMembers';
 
 export default function ProjectDetail() {
@@ -12,12 +12,17 @@ export default function ProjectDetail() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  
+  const [myRole, setMyRole] = useState<ProjectRole>('member');
+  const [roleLoading, setRoleLoading] = useState(true);
 
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isOwner = project?.owner_id === currentUser.id;
+  const isOwner = myRole === 'owner';
+  const isAdmin = myRole === 'admin';
+  const canEdit = isOwner;
 
   useEffect(() => {
     loadProject();
+    loadMyRole();
   }, [id]);
 
   const loadProject = async () => {
@@ -33,6 +38,17 @@ export default function ProjectDetail() {
     }
   };
 
+  const loadMyRole = async () => {
+    try {
+      const response = await projectsAPI.getMyRole(id!);
+      setMyRole(response.data.role);
+    } catch (err) {
+      console.error('Failed to load role', err);
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -44,7 +60,12 @@ export default function ProjectDetail() {
     }
   };
 
-  if (loading) return <div style={styles.loading}>Loading...</div>;
+  const handleOwnershipTransferred = () => {
+    loadProject();
+    loadMyRole();
+  };
+
+  if (loading || roleLoading) return <div style={styles.loading}>Loading...</div>;
   if (!project) return <div>Project not found</div>;
 
   return (
@@ -93,7 +114,15 @@ export default function ProjectDetail() {
             ) : (
               <>
                 <div style={styles.header}>
-                  <h1>{project.name}</h1>
+                  <div>
+                    <h1>{project.name}</h1>
+                    <span style={{
+                      ...styles.myRoleBadge,
+                      backgroundColor: myRole === 'owner' ? '#f39c12' : myRole === 'admin' ? '#9b59b6' : '#95a5a6'
+                    }}>
+                      {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} You are {myRole}
+                    </span>
+                  </div>
                   <div style={styles.headerActions}>
                     <button 
                       onClick={() => navigate(`/projects/${id}/tasks`)} 
@@ -101,7 +130,7 @@ export default function ProjectDetail() {
                     >
                       📋 View Tasks
                     </button>
-                    {isOwner && (
+                    {canEdit && (
                       <button onClick={() => setEditing(true)} style={styles.button}>
                         Edit
                       </button>
@@ -119,7 +148,11 @@ export default function ProjectDetail() {
         </div>
 
         <div style={styles.sidebar}>
-          <ProjectMembers projectId={id!} isOwner={isOwner} />
+          <ProjectMembers 
+            projectId={id!} 
+            currentUserRole={myRole}
+            onOwnershipTransferred={handleOwnershipTransferred}
+          />
         </div>
       </div>
     </div>
@@ -144,7 +177,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   layout: {
     display: 'grid',
-    gridTemplateColumns: '1fr 350px',
+    gridTemplateColumns: '1fr 380px',
     gap: '1.5rem',
     alignItems: 'start',
   },
@@ -171,6 +204,14 @@ const styles: Record<string, React.CSSProperties> = {
   headerActions: {
     display: 'flex',
     gap: '0.5rem',
+  },
+  myRoleBadge: {
+    display: 'inline-block',
+    padding: '0.25rem 0.75rem',
+    borderRadius: '12px',
+    fontSize: '0.8rem',
+    color: 'white',
+    marginTop: '0.5rem',
   },
   field: {
     marginBottom: '1rem',

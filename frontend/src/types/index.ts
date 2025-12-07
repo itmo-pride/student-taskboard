@@ -1,3 +1,5 @@
+export type ProjectRole = 'owner' | 'admin' | 'member';
+
 export interface User {
   id: string;
   email: string;
@@ -58,6 +60,16 @@ export interface Formula {
   updated_at: string;
 }
 
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: ProjectRole;
+  joined_at: string;
+  user_name: string;
+  user_email: string;
+}
+
 export interface CreateProjectRequest {
   name: string;
   description: string;
@@ -86,14 +98,4 @@ export interface CreateFormulaRequest {
   latex: string;
   description: string;
   project_id?: string;
-}
-
-export interface ProjectMember {
-  id: string;
-  project_id: string;
-  user_id: string;
-  role: string;
-  joined_at: string;
-  user_name: string;
-  user_email: string;
 }

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { tasksAPI } from '../api/client';
-import { Task } from '../types';
+import { tasksAPI, projectsAPI } from '../api/client';
+import { Task, ProjectMember, ProjectRole } from '../types';
 
 export default function Tasks() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<Task[]>([]); 
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -14,85 +15,128 @@ export default function Tasks() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('todo');
   const [priority, setPriority] = useState('medium');
+  const [assignedTo, setAssignedTo] = useState<string>('');
+
+  const [myRole, setMyRole] = useState<ProjectRole>('member');
+  
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
     if (projectId) {
-      loadTasks();
+      loadData();
     }
   }, [projectId]);
 
-  const loadTasks = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Loading tasks for project:', projectId);
       
-      const response = await tasksAPI.getByProject(projectId!);
-      console.log('Tasks response:', response.data); 
+      const [tasksRes, membersRes, roleRes] = await Promise.all([
+        tasksAPI.getByProject(projectId!),
+        projectsAPI.getMembers(projectId!),
+        projectsAPI.getMyRole(projectId!), 
+      ]);
       
-      
-      const tasksData = Array.isArray(response.data) ? response.data : [];
-      setTasks(tasksData);
+      setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
+      setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
+      setMyRole(roleRes.data.role);
     } catch (err: any) {
-      console.error('Failed to load tasks:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to load tasks');
-      setTasks([]); 
+      console.error('Failed to load data:', err);
+      setError(err.response?.data?.error || 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
   };
 
+  
+  const canDeleteTask = (task: Task): boolean => {
+    
+    if (myRole === 'owner' || myRole === 'admin') {
+      return true;
+    }
+    
+    return task.created_by === currentUser.id;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
-      console.log('Creating task:', { title, description, status, priority }); 
       await tasksAPI.create(projectId!, {
         title,
         description,
         status,
         priority,
+        assigned_to: assignedTo || null,
       });
-      setTitle('');
-      setDescription('');
-      setStatus('todo');
-      setPriority('medium');
-      setShowForm(false);
-      loadTasks();
+      resetForm();
+      loadData();
     } catch (err: any) {
-      console.error('Failed to create task:', err);
       alert(err.response?.data?.error || 'Failed to create task');
     }
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setStatus('todo');
+    setPriority('medium');
+    setAssignedTo('');
+    setShowForm(false);
   };
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
       await tasksAPI.update(taskId, { status: newStatus });
-      loadTasks();
+      loadData();
     } catch (err) {
       alert('Failed to update task');
     }
   };
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
+  const handleAssigneeChange = async (taskId: string, userId: string | null) => {
     try {
-      await tasksAPI.delete(taskId);
-      loadTasks();
+      await tasksAPI.update(taskId, { assigned_to: userId });
+      loadData();
     } catch (err) {
-      alert('Failed to delete task');
+      alert('Failed to update assignee');
     }
   };
 
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+
+    try {
+      await tasksAPI.delete(taskId);
+      loadData();
+    } catch (err: any) {
+      
+      const errorMsg = err.response?.data?.error || 'Failed to delete task';
+      alert(errorMsg);
+    }
+  };
+
+  const getMemberName = (userId: string | undefined | null): string | null => {
+    if (!userId) return null;
+    const member = members.find(m => m.user_id === userId);
+    return member?.user_name || null;
+  };
+
+  const getInitials = (name: string): string => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
   
+  const isMyTask = (task: Task): boolean => {
+    return task.created_by === currentUser.id;
+  };
+
   const groupedTasks = {
     todo: tasks?.filter((t) => t.status === 'todo') ?? [],
     in_progress: tasks?.filter((t) => t.status === 'in_progress') ?? [],
     done: tasks?.filter((t) => t.status === 'done') ?? [],
   };
 
-  
   if (loading) {
     return (
       <div style={styles.container}>
@@ -104,7 +148,6 @@ export default function Tasks() {
     );
   }
 
-  
   if (error) {
     return (
       <div style={styles.container}>
@@ -113,9 +156,7 @@ export default function Tasks() {
         </button>
         <div style={styles.error}>
           <p>Error: {error}</p>
-          <button onClick={loadTasks} style={styles.retryButton}>
-            Retry
-          </button>
+          <button onClick={loadData} style={styles.retryButton}>Retry</button>
         </div>
       </div>
     );
@@ -128,24 +169,43 @@ export default function Tasks() {
       </button>
 
       <div style={styles.header}>
-        <h1>Tasks</h1>
-        <button onClick={() => setShowForm(!showForm)} style={styles.button}>
-          {showForm ? 'Cancel' : 'New Task'}
-        </button>
+        <div>
+          <h1>Tasks</h1>
+          <span style={{
+            ...styles.roleBadge,
+            backgroundColor: myRole === 'owner' ? '#f39c12' : myRole === 'admin' ? '#9b59b6' : '#95a5a6'
+          }}>
+            {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} {myRole}
+          </span>
+        </div>
+        <div style={styles.headerRight}>
+          <span style={styles.memberCount}>👥 {members.length} members</span>
+          <button onClick={() => setShowForm(!showForm)} style={styles.button}>
+            {showForm ? 'Cancel' : '+ New Task'}
+          </button>
+        </div>
       </div>
+
+      {myRole === 'member' && (
+        <div style={styles.roleHint}>
+          💡 As a member, you can only delete tasks you created.
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label>Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              style={styles.input}
-              placeholder="Enter task title"
-            />
+          <div style={styles.formRow}>
+            <div style={styles.field}>
+              <label>Title *</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                style={styles.input}
+                placeholder="Enter task title"
+              />
+            </div>
           </div>
 
           <div style={styles.field}>
@@ -153,13 +213,13 @@ export default function Tasks() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
+              rows={2}
               style={styles.input}
               placeholder="Enter task description"
             />
           </div>
 
-          <div style={styles.row}>
+          <div style={styles.formRow}>
             <div style={styles.field}>
               <label>Status</label>
               <select
@@ -185,46 +245,69 @@ export default function Tasks() {
                 <option value="high">High</option>
               </select>
             </div>
+
+            <div style={styles.field}>
+              <label>Assign To</label>
+              <select
+                value={assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
+                style={styles.input}
+              >
+                <option value="">Unassigned</option>
+                {members.map((member) => (
+                  <option key={member.user_id} value={member.user_id}>
+                    {member.user_name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <button type="submit" style={styles.button}>Create Task</button>
         </form>
       )}
 
-      {tasks.length === 0 && !showForm && (
-        <div style={styles.emptyState}>
-          <p>No tasks yet for this project.</p>
-          <p>Click "New Task" to create your first task!</p>
-        </div>
-      )}
+      <div style={styles.board}>
+        {(['todo', 'in_progress', 'done'] as const).map((statusKey) => (
+          <div key={statusKey} style={styles.column}>
+            <h2 style={styles.columnTitle}>
+              <span style={styles.columnIcon}>
+                {statusKey === 'todo' ? '📋' : statusKey === 'in_progress' ? '🔄' : '✅'}
+              </span>
+              {statusKey === 'todo' ? 'To Do' : statusKey === 'in_progress' ? 'In Progress' : 'Done'}
+              <span style={styles.count}>({groupedTasks[statusKey].length})</span>
+            </h2>
 
-      {tasks.length > 0 && (
-        <div style={styles.board}>
-          {(['todo', 'in_progress', 'done'] as const).map((statusKey) => (
-            <div key={statusKey} style={styles.column}>
-              <h2 style={styles.columnTitle}>
-                {statusKey === 'todo'
-                  ? '📋 To Do'
-                  : statusKey === 'in_progress'
-                  ? '🔄 In Progress'
-                  : '✅ Done'}
-                <span style={styles.count}>({groupedTasks[statusKey].length})</span>
-              </h2>
+            {groupedTasks[statusKey].length === 0 && (
+              <div style={styles.emptyColumn}>No tasks</div>
+            )}
 
-              {groupedTasks[statusKey].length === 0 && (
-                <div style={styles.emptyColumn}>No tasks</div>
-              )}
-
-              {groupedTasks[statusKey].map((task) => (
-                <div key={task.id} style={styles.taskCard}>
-                  <h3 style={styles.taskTitle}>{task.title}</h3>
-                  {task.description && (
-                    <p style={styles.taskDescription}>{task.description}</p>
-                  )}
-                  <div style={styles.taskMeta}>
+            {groupedTasks[statusKey].map((task) => {
+              const assigneeName = getMemberName(task.assigned_to);
+              const canDelete = canDeleteTask(task);
+              const isMine = isMyTask(task);
+              
+              return (
+                <div 
+                  key={task.id} 
+                  style={{
+                    ...styles.taskCard,
+                    
+                    ...(myRole === 'member' && isMine ? styles.myTaskCard : {})
+                  }}
+                >
+                  <div style={styles.taskHeader}>
+                    <h3 style={styles.taskTitle}>
+                      {task.title}
+                      {isMine && (
+                        <span style={styles.myTaskBadge} title="You created this task">
+                          ✍️
+                        </span>
+                      )}
+                    </h3>
                     <span
                       style={{
-                        ...styles.badge,
+                        ...styles.priorityBadge,
                         backgroundColor:
                           task.priority === 'high'
                             ? '#e74c3c'
@@ -237,6 +320,35 @@ export default function Tasks() {
                     </span>
                   </div>
 
+                  {task.description && (
+                    <p style={styles.taskDescription}>{task.description}</p>
+                  )}
+
+                  <div style={styles.assigneeSection}>
+                    <label style={styles.assigneeLabel}>Assigned to:</label>
+                    <select
+                      value={task.assigned_to || ''}
+                      onChange={(e) => handleAssigneeChange(task.id, e.target.value || null)}
+                      style={styles.assigneeSelect}
+                    >
+                      <option value="">Unassigned</option>
+                      {members.map((member) => (
+                        <option key={member.user_id} value={member.user_id}>
+                          {member.user_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {assigneeName && (
+                    <div style={styles.assigneeDisplay}>
+                      <div style={styles.assigneeAvatar}>
+                        {getInitials(assigneeName)}
+                      </div>
+                      <span style={styles.assigneeName}>{assigneeName}</span>
+                    </div>
+                  )}
+
                   <div style={styles.taskActions}>
                     {statusKey !== 'todo' && (
                       <button
@@ -247,6 +359,7 @@ export default function Tasks() {
                           )
                         }
                         style={styles.moveButton}
+                        title="Move back"
                       >
                         ←
                       </button>
@@ -260,30 +373,42 @@ export default function Tasks() {
                           )
                         }
                         style={styles.moveButton}
+                        title="Move forward"
                       >
                         →
                       </button>
                     )}
-                    <button
-                      onClick={() => handleDelete(task.id)}
-                      style={styles.deleteButton}
-                    >
-                      🗑
-                    </button>
+                    {canDelete ? (
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        style={styles.deleteButton}
+                        title="Delete task"
+                      >
+                        🗑
+                      </button>
+                    ) : (
+                      <button
+                        style={styles.deleteButtonDisabled}
+                        title="You can only delete your own tasks"
+                        disabled
+                      >
+                        🗑
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: '1200px',
+    maxWidth: '1400px',
     margin: '0 auto',
   },
   loading: {
@@ -321,70 +446,94 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '2rem',
+    marginBottom: '1rem',
+  },
+  roleBadge: {
+    display: 'inline-block',
+    padding: '0.2rem 0.6rem',
+    borderRadius: '12px',
+    fontSize: '0.75rem',
+    color: 'white',
+    marginLeft: '0.5rem',
+    textTransform: 'capitalize',
+  },
+  roleHint: {
+    backgroundColor: '#e8f4f8',
+    padding: '0.75rem 1rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    color: '#2980b9',
+    fontSize: '0.9rem',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  memberCount: {
+    color: '#666',
+    fontSize: '0.9rem',
   },
   button: {
     padding: '0.75rem 1.5rem',
     backgroundColor: '#3498db',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     cursor: 'pointer',
+    fontSize: '0.95rem',
   },
   form: {
     backgroundColor: 'white',
     padding: '1.5rem',
-    borderRadius: '8px',
+    borderRadius: '12px',
     marginBottom: '2rem',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
   },
-  field: {
-    marginBottom: '1rem',
-    flex: 1,
-  },
-  row: {
+  formRow: {
     display: 'flex',
     gap: '1rem',
+    marginBottom: '1rem',
+  },
+  field: {
+    flex: 1,
   },
   input: {
     width: '100%',
     padding: '0.75rem',
     border: '1px solid #ddd',
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '1rem',
     marginTop: '0.25rem',
-  },
-  emptyState: {
-    textAlign: 'center',
-    padding: '3rem',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    color: '#666',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
   board: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '1rem',
-    minHeight: '400px',
+    minHeight: '500px',
   },
   column: {
     backgroundColor: '#f0f2f5',
     padding: '1rem',
-    borderRadius: '8px',
-    minHeight: '300px',
+    borderRadius: '12px',
+    minHeight: '400px',
   },
   columnTitle: {
     marginBottom: '1rem',
-    fontSize: '1.1rem',
+    fontSize: '1rem',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
+    color: '#2c3e50',
+  },
+  columnIcon: {
+    fontSize: '1.2rem',
   },
   count: {
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     color: '#666',
     fontWeight: 'normal',
+    marginLeft: 'auto',
   },
   emptyColumn: {
     textAlign: 'center',
@@ -395,52 +544,128 @@ const styles: Record<string, React.CSSProperties> = {
   taskCard: {
     backgroundColor: 'white',
     padding: '1rem',
-    borderRadius: '8px',
+    borderRadius: '10px',
+    marginBottom: '0.75rem',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+    transition: 'box-shadow 0.2s',
+  },
+  
+  myTaskCard: {
+    borderLeft: '3px solid #27ae60',
+  },
+  taskHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: '0.5rem',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
   taskTitle: {
-    margin: '0 0 0.5rem 0',
-    fontSize: '1rem',
+    margin: 0,
+    fontSize: '0.95rem',
+    fontWeight: 600,
+    color: '#2c3e50',
+    flex: 1,
+    marginRight: '0.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.25rem',
+  },
+  
+  myTaskBadge: {
+    fontSize: '0.8rem',
+  },
+  priorityBadge: {
+    padding: '0.15rem 0.5rem',
+    borderRadius: '4px',
+    fontSize: '0.7rem',
+    color: 'white',
+    textTransform: 'uppercase',
+    fontWeight: 600,
   },
   taskDescription: {
     fontSize: '0.85rem',
     color: '#666',
-    margin: '0 0 0.5rem 0',
+    margin: '0.5rem 0',
+    lineHeight: 1.4,
   },
-  taskMeta: {
-    marginBottom: '0.5rem',
+  assigneeSection: {
+    marginTop: '0.75rem',
+    padding: '0.5rem',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
   },
-  badge: {
-    display: 'inline-block',
-    padding: '0.2rem 0.5rem',
-    borderRadius: '4px',
+  assigneeLabel: {
     fontSize: '0.75rem',
+    color: '#666',
+    display: 'block',
+    marginBottom: '0.25rem',
+  },
+  assigneeSelect: {
+    width: '100%',
+    padding: '0.4rem',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '0.85rem',
+    backgroundColor: 'white',
+  },
+  assigneeDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+  },
+  assigneeAvatar: {
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    backgroundColor: '#9b59b6',
     color: 'white',
-    textTransform: 'uppercase',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.65rem',
+    fontWeight: 'bold',
+  },
+  assigneeName: {
+    fontSize: '0.8rem',
+    color: '#555',
   },
   taskActions: {
     display: 'flex',
     gap: '0.25rem',
-    marginTop: '0.5rem',
+    marginTop: '0.75rem',
+    paddingTop: '0.75rem',
+    borderTop: '1px solid #eee',
   },
   moveButton: {
-    padding: '0.3rem 0.6rem',
+    padding: '0.35rem 0.6rem',
     backgroundColor: '#3498db',
     color: 'white',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '0.8rem',
+    fontSize: '0.85rem',
   },
   deleteButton: {
-    padding: '0.3rem 0.6rem',
+    padding: '0.35rem 0.6rem',
     backgroundColor: '#e74c3c',
     color: 'white',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '0.8rem',
+    fontSize: '0.85rem',
     marginLeft: 'auto',
+  },
+  
+  deleteButtonDisabled: {
+    padding: '0.35rem 0.6rem',
+    backgroundColor: '#bdc3c7',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'not-allowed',
+    fontSize: '0.85rem',
+    marginLeft: 'auto',
+    opacity: 0.6,
   },
 };
