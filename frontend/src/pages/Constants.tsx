@@ -14,6 +14,8 @@ export default function Constants() {
   const [description, setDescription] = useState('');
   const [scope, setScope] = useState('user');
 
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
   useEffect(() => {
     loadConstants();
   }, []);
@@ -55,30 +57,54 @@ export default function Constants() {
     try {
       await constantsAPI.delete(id);
       loadConstants();
-    } catch (err) {
-      alert('Failed to delete');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to delete');
     }
+  };
+
+  const formatValueLatex = (value: string): string => {
+    const scientificMatch = value.match(/^([+-]?\d*\.?\d+)[eE]([+-]?\d+)$/);
+    if (scientificMatch) {
+      const mantissa = scientificMatch[1];
+      const exponent = scientificMatch[2];
+      return `${mantissa} \\times 10^{${exponent}}`;
+    }
+    
+    if (value.includes('\\times')) {
+      return value;
+    }
+    
+    return value;
+  };
+
+  const formatUnitLatex = (unit: string): string => {
+    if (!unit) return '';
+    
+    return unit
+      .replace(/\^(-?\d+)/g, '^{$1}')
+      .replace(/·/g, ' \\cdot ')
+      .replace(/\*/g, ' \\cdot ')
+      .replace(/\//g, '/');
   };
 
   const formatConstantLatex = (c: Constant): string => {
-    let latex = `${c.symbol} = ${c.value}`;
-    if (c.unit) {
-      const formattedUnit = formatUnit(c.unit);
-      latex += `\\,\\mathrm{${formattedUnit}}`;
+    const formattedValue = formatValueLatex(c.value);
+    const formattedUnit = formatUnitLatex(c.unit);
+    
+    let latex = `${c.symbol} = ${formattedValue}`;
+    
+    if (formattedUnit) {
+      latex += `\\;\\mathrm{${formattedUnit}}`;
     }
+    
     return latex;
   };
 
-  const formatUnit = (unit: string): string => {
-    return unit
-      .replace(/\^(-?\d+)/g, '^{$1}')
-      .replace(/·/g, '\\cdot ')
-      .replace(/\*/g, '\\cdot ')
-      .replace(/\//g, '/')
-      .replace(/mol/g, 'mol')
-      .replace(/kg/g, 'kg')
-      .replace(/m/g, 'm')
-      .replace(/s/g, 's');
+  const canDelete = (constant: Constant): boolean => {
+    if (constant.scope === 'global' && constant.created_by !== currentUser.id) {
+      return false;
+    }
+    return constant.created_by === currentUser.id;
   };
 
   if (loading) return <div style={styles.loading}>Loading constants...</div>;
@@ -128,8 +154,11 @@ export default function Constants() {
                 onChange={(e) => setValue(e.target.value)}
                 required
                 style={styles.input}
-                placeholder="e.g., 2.998 \times 10^8"
+                placeholder="e.g., 2.998e8 or 2.998 \times 10^8"
               />
+              <small style={styles.hint}>
+                Use scientific notation: 6.626e-34 or LaTeX: 6.626 \times 10^{'{-34}'}
+              </small>
             </div>
             <div style={styles.field}>
               <label>Unit</label>
@@ -143,7 +172,6 @@ export default function Constants() {
             </div>
           </div>
 
-          {/* Предпросмотр */}
           {(symbol || value) && (
             <div style={styles.preview}>
               <label>Preview:</label>
@@ -193,7 +221,6 @@ export default function Constants() {
               </span>
             </div>
 
-            {/* Красивый LaTeX рендеринг */}
             <div style={styles.formulaBox}>
               <LatexRenderer math={formatConstantLatex(constant)} block />
             </div>
@@ -202,11 +229,6 @@ export default function Constants() {
               <p style={styles.description}>{constant.description}</p>
             )}
 
-            <div style={styles.actions}>
-              <button onClick={() => handleDelete(constant.id)} style={styles.deleteButton}>
-                Delete
-              </button>
-            </div>
           </div>
         ))}
       </div>
@@ -261,6 +283,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     fontSize: '1rem',
     marginTop: '0.25rem',
+  },
+  hint: {
+    display: 'block',
+    marginTop: '0.25rem',
+    fontSize: '0.8rem',
+    color: '#888',
   },
   preview: {
     marginBottom: '1rem',
@@ -329,6 +357,7 @@ const styles: Record<string, React.CSSProperties> = {
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   deleteButton: {
     padding: '0.5rem 1rem',
@@ -338,6 +367,13 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '0.85rem',
+  },
+  systemBadge: {
+    padding: '0.4rem 0.8rem',
+    backgroundColor: '#f0f0f0',
+    color: '#666',
+    borderRadius: '4px',
+    fontSize: '0.8rem',
   },
   empty: {
     textAlign: 'center',

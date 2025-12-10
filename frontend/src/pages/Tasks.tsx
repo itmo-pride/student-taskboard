@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { tasksAPI, projectsAPI } from '../api/client';
 import { Task, ProjectMember, ProjectRole } from '../types';
+import DueDatePicker from '../components/DueDatePicker';
 
 export default function Tasks() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -16,9 +17,10 @@ export default function Tasks() {
   const [status, setStatus] = useState('todo');
   const [priority, setPriority] = useState('medium');
   const [assignedTo, setAssignedTo] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
 
   const [myRole, setMyRole] = useState<ProjectRole>('member');
-  
+
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
@@ -31,13 +33,13 @@ export default function Tasks() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const [tasksRes, membersRes, roleRes] = await Promise.all([
         tasksAPI.getByProject(projectId!),
         projectsAPI.getMembers(projectId!),
-        projectsAPI.getMyRole(projectId!), 
+        projectsAPI.getMyRole(projectId!),
       ]);
-      
+
       setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
       setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
       setMyRole(roleRes.data.role);
@@ -49,13 +51,10 @@ export default function Tasks() {
     }
   };
 
-  
   const canDeleteTask = (task: Task): boolean => {
-    
     if (myRole === 'owner' || myRole === 'admin') {
       return true;
     }
-    
     return task.created_by === currentUser.id;
   };
 
@@ -67,7 +66,8 @@ export default function Tasks() {
         description,
         status,
         priority,
-        assigned_to: assignedTo || null,
+        due_date: dueDate || null,
+        assigned_to: assignedTo || undefined,
       });
       resetForm();
       loadData();
@@ -82,6 +82,7 @@ export default function Tasks() {
     setStatus('todo');
     setPriority('medium');
     setAssignedTo('');
+    setDueDate('');
     setShowForm(false);
   };
 
@@ -96,11 +97,16 @@ export default function Tasks() {
 
   const handleAssigneeChange = async (taskId: string, userId: string | null) => {
     try {
-      await tasksAPI.update(taskId, { assigned_to: userId });
+      await tasksAPI.update(taskId, { assigned_to: userId || undefined });
       loadData();
     } catch (err) {
       alert('Failed to update assignee');
     }
+  };
+
+  const handleDueDateChange = async (taskId: string, newDueDate: string | null) => {
+    await tasksAPI.update(taskId, { due_date: newDueDate || '' });
+    loadData();
   };
 
   const handleDelete = async (taskId: string) => {
@@ -110,7 +116,6 @@ export default function Tasks() {
       await tasksAPI.delete(taskId);
       loadData();
     } catch (err: any) {
-      
       const errorMsg = err.response?.data?.error || 'Failed to delete task';
       alert(errorMsg);
     }
@@ -126,9 +131,46 @@ export default function Tasks() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  
   const isMyTask = (task: Task): boolean => {
     return task.created_by === currentUser.id;
+  };
+
+  const formatDueDate = (dueDate: string | null | undefined): string => {
+    if (!dueDate) return '';
+    const date = new Date(dueDate);
+    return date.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'short',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+    });
+  };
+
+  const getDueDateStatus = (dueDate: string | null | undefined): 'overdue' | 'soon' | 'normal' | null => {
+    if (!dueDate) return null;
+    
+    const now = new Date();
+    const due = new Date(dueDate);
+    const diffMs = due.getTime() - now.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    if (diffMs < 0) return 'overdue';
+    if (diffDays <= 2) return 'soon';
+    return 'normal';
+  };
+
+  const getDueDateText = (dueDate: string | null | undefined): string => {
+    if (!dueDate) return 'No deadline';
+    
+    const now = new Date();
+    const due = new Date(dueDate);
+    const diffMs = due.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+    if (diffDays === 0) return 'Due today';
+    if (diffDays === 1) return 'Due tomorrow';
+    if (diffDays <= 7) return `${diffDays} days left`;
+    return formatDueDate(dueDate);
   };
 
   const groupedTasks = {
@@ -175,7 +217,7 @@ export default function Tasks() {
             ...styles.roleBadge,
             backgroundColor: myRole === 'owner' ? '#f39c12' : myRole === 'admin' ? '#9b59b6' : '#95a5a6'
           }}>
-            {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} {myRole}
+            {myRole === 'owner' ? '' : myRole === 'admin' ? '' : ''} {myRole}
           </span>
         </div>
         <div style={styles.headerRight}>
@@ -261,6 +303,17 @@ export default function Tasks() {
                 ))}
               </select>
             </div>
+
+            <div style={styles.field}>
+              <label>Due Date</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                style={styles.input}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
           </div>
 
           <button type="submit" style={styles.button}>Create Task</button>
@@ -272,7 +325,7 @@ export default function Tasks() {
           <div key={statusKey} style={styles.column}>
             <h2 style={styles.columnTitle}>
               <span style={styles.columnIcon}>
-                {statusKey === 'todo' ? '📋' : statusKey === 'in_progress' ? '🔄' : '✅'}
+                {statusKey === 'todo' ? '' : statusKey === 'in_progress' ? '' : ''}
               </span>
               {statusKey === 'todo' ? 'To Do' : statusKey === 'in_progress' ? 'In Progress' : 'Done'}
               <span style={styles.count}>({groupedTasks[statusKey].length})</span>
@@ -284,16 +337,18 @@ export default function Tasks() {
 
             {groupedTasks[statusKey].map((task) => {
               const assigneeName = getMemberName(task.assigned_to);
+              const creatorName = getMemberName(task.created_by);
               const canDelete = canDeleteTask(task);
               const isMine = isMyTask(task);
-              
+              const dueDateStatus = getDueDateStatus(task.due_date);
+
               return (
-                <div 
-                  key={task.id} 
+                <div
+                  key={task.id}
                   style={{
                     ...styles.taskCard,
-                    
-                    ...(myRole === 'member' && isMine ? styles.myTaskCard : {})
+                    ...(myRole === 'member' && isMine ? styles.myTaskCard : {}),
+                    ...(dueDateStatus === 'overdue' && task.status !== 'done' ? styles.overdueCard : {}),
                   }}
                 >
                   <div style={styles.taskHeader}>
@@ -301,7 +356,6 @@ export default function Tasks() {
                       {task.title}
                       {isMine && (
                         <span style={styles.myTaskBadge} title="You created this task">
-                          ✍️
                         </span>
                       )}
                     </h3>
@@ -323,6 +377,36 @@ export default function Tasks() {
                   {task.description && (
                     <p style={styles.taskDescription}>{task.description}</p>
                   )}
+
+                  <div style={styles.creatorInfo}>
+                    <span style={styles.creatorLabel}>Created by:</span>
+                    <span style={styles.creatorName}>
+                      {creatorName || 'Unknown'}
+                    </span>
+                  </div>
+
+                  <div style={styles.dueDateSection}>
+                    <div style={styles.dueDateHeader}>
+                      <span style={styles.dueDateLabel}>Due:</span>
+                      {task.due_date && task.status !== 'done' && (
+                        <span style={{
+                          ...styles.dueDateStatus,
+                          color: dueDateStatus === 'overdue' ? '#e74c3c' 
+                               : dueDateStatus === 'soon' ? '#e67e22' 
+                               : '#27ae60',
+                        }}>
+                          {getDueDateText(task.due_date)}
+                        </span>
+                      )}
+                      {!task.due_date && (
+                        <span style={styles.noDueDate}>No deadline</span>
+                      )}
+                    </div>
+                    <DueDatePicker
+                      value={task.due_date}
+                      onChange={(newDate) => handleDueDateChange(task.id, newDate)}
+                    />
+                  </div>
 
                   <div style={styles.assigneeSection}>
                     <label style={styles.assigneeLabel}>Assigned to:</label>
@@ -494,9 +578,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '1rem',
     marginBottom: '1rem',
+    flexWrap: 'wrap',
   },
   field: {
-    flex: 1,
+    flex: '1 1 200px',
+    minWidth: '150px',
   },
   input: {
     width: '100%',
@@ -549,9 +635,12 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
     transition: 'box-shadow 0.2s',
   },
-  
   myTaskCard: {
     borderLeft: '3px solid #27ae60',
+  },
+  overdueCard: {
+    borderLeft: '3px solid #e74c3c',
+    backgroundColor: '#fff5f5',
   },
   taskHeader: {
     display: 'flex',
@@ -570,7 +659,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.25rem',
   },
-  
   myTaskBadge: {
     fontSize: '0.8rem',
   },
@@ -588,8 +676,54 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0.5rem 0',
     lineHeight: 1.4,
   },
+  creatorInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    marginBottom: '0.5rem',
+    padding: '0.4rem 0.6rem',
+    backgroundColor: '#f0f0f0',
+    borderRadius: '6px',
+    fontSize: '0.8rem',
+  },
+  creatorLabel: {
+    color: '#888',
+  },
+  creatorName: {
+    color: '#555',
+    fontWeight: 500,
+  },
+  dueDateSection: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '0.5rem',
+    marginBottom: '0.5rem',
+    padding: '0.5rem',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
+    flexWrap: 'wrap',
+  },
+  dueDateHeader: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.2rem',
+  },
+  dueDateLabel: {
+    fontSize: '0.75rem',
+    color: '#666',
+  },
+  dueDateStatus: {
+    fontSize: '0.75rem',
+    fontWeight: 600,
+  },
+  noDueDate: {
+    fontSize: '0.75rem',
+    color: '#999',
+    fontStyle: 'italic',
+  },
   assigneeSection: {
-    marginTop: '0.75rem',
+    marginTop: '0.5rem',
     padding: '0.5rem',
     backgroundColor: '#f8f9fa',
     borderRadius: '6px',
@@ -656,7 +790,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.85rem',
     marginLeft: 'auto',
   },
-  
   deleteButtonDisabled: {
     padding: '0.35rem 0.6rem',
     backgroundColor: '#bdc3c7',

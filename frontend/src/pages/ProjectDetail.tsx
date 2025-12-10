@@ -129,7 +129,7 @@ export default function ProjectDetail() {
                             : '#95a5a6',
                       }}
                     >
-                      {myRole === 'owner' ? '👑' : myRole === 'admin' ? '⚡' : '👤'} You are{' '}
+                      {myRole === 'owner' ? '' : myRole === 'admin' ? '' : ''} You are{' '}
                       {myRole}
                     </span>
                   </div>
