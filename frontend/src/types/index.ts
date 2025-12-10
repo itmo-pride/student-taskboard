@@ -29,6 +29,7 @@ export interface Task {
   description: string;
   status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
+  due_date?: string | null;
   assigned_to?: string;
   created_by: string;
   created_at: string;
@@ -80,6 +81,7 @@ export interface CreateTaskRequest {
   description: string;
   status?: string;
   priority?: string;
+  due_date?: string | null;
   assigned_to?: string;
 }
 

@@ -44,15 +44,6 @@ export default function Formulas() {
     setShowForm(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return;
-    try {
-      await formulasAPI.delete(id);
-      loadFormulas();
-    } catch (err) {
-      alert('Failed to delete');
-    }
-  };
 
   if (loading) return <div style={styles.loading}>Loading formulas...</div>;
 
@@ -119,7 +110,7 @@ export default function Formulas() {
       )}
 
       <details style={styles.reference}>
-        <summary style={styles.referenceSummary}>📚 LaTeX Quick Reference</summary>
+        <summary style={styles.referenceSummary}>LaTeX Quick Reference</summary>
         <div style={styles.referenceContent}>
           <div style={styles.refGrid}>
             <RefItem code="x^2" description="Superscript" />
@@ -160,9 +151,6 @@ export default function Formulas() {
               <small style={styles.date}>
                 {new Date(formula.created_at).toLocaleDateString()}
               </small>
-              <button onClick={() => handleDelete(formula.id)} style={styles.deleteButton}>
-                Delete
-              </button>
             </div>
           </div>
         ))}
@@ -357,15 +345,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   date: {
     color: '#999',
-  },
-  deleteButton: {
-    padding: '0.4rem 0.8rem',
-    backgroundColor: '#e74c3c',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
   },
   empty: {
     textAlign: 'center',
