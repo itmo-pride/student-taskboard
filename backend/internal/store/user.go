@@ -86,3 +86,18 @@ func (s *Store) GetUserByID(id uuid.UUID) (*models.User, error) {
 	}
 	return &user, nil
 }
+
+func (s *Store) IsSystemUser(userID uuid.UUID) (bool, error) {
+	var email string
+	query := `SELECT email FROM users WHERE id = $1`
+	err := s.db.Get(&email, query, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check system user: %w", err)
+	}
+	const SystemUserEmail = "physics-constants@system.local"
+
+	return email == SystemUserEmail, nil
+}

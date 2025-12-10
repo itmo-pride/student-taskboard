@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -48,24 +46,20 @@ func GetTasks(s *store.Store) gin.HandlerFunc {
 
 func CreateTask(s *store.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("Create task")
 		userID, err := getUserID(c)
 		if err != nil {
-			log.Printf("Error while getting user id : %v\n", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
 
 		projectID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
-			log.Printf("Error while getting project id : %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 			return
 		}
 
 		isMember, err := s.IsProjectMember(projectID, userID)
 		if err != nil {
-			log.Printf("Error while checking is project member : %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
@@ -87,6 +81,20 @@ func CreateTask(s *store.Store) gin.HandlerFunc {
 			req.Priority = "medium"
 		}
 
+		var dueDate *time.Time
+		if req.DueDate != nil && *req.DueDate != "" {
+			parsed, err := time.Parse(time.RFC3339, *req.DueDate)
+			if err != nil {
+				parsed, err = time.Parse("2006-01-02", *req.DueDate)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid due_date format, use RFC3339 or YYYY-MM-DD"})
+					return
+				}
+				parsed = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			}
+			dueDate = &parsed
+		}
+
 		task := &models.Task{
 			ID:          uuid.New(),
 			ProjectID:   projectID,
@@ -94,6 +102,7 @@ func CreateTask(s *store.Store) gin.HandlerFunc {
 			Description: req.Description,
 			Status:      req.Status,
 			Priority:    req.Priority,
+			DueDate:     dueDate,
 			AssignedTo:  req.AssignedTo,
 			CreatedBy:   userID,
 			CreatedAt:   time.Now(),
@@ -202,6 +211,24 @@ func UpdateTask(s *store.Store) gin.HandlerFunc {
 		if req.AssignedTo != nil {
 			task.AssignedTo = req.AssignedTo
 		}
+
+		if req.DueDate != nil {
+			if *req.DueDate == "" || *req.DueDate == "null" {
+				task.DueDate = nil
+			} else {
+				parsed, err := time.Parse(time.RFC3339, *req.DueDate)
+				if err != nil {
+					parsed, err = time.Parse("2006-01-02", *req.DueDate)
+					if err != nil {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "invalid due_date format"})
+						return
+					}
+					parsed = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+				}
+				task.DueDate = &parsed
+			}
+		}
+
 		task.UpdatedAt = time.Now()
 
 		if err := s.UpdateTask(task); err != nil {
