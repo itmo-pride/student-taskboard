@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,17 @@ func GetTasks(s *store.Store) gin.HandlerFunc {
 			return
 		}
 
-		tasks, err := s.GetTasksByProject(projectID)
+		var filterTagIDs []uuid.UUID
+		if tagsParam := c.Query("tags"); tagsParam != "" {
+			tagStrings := strings.Split(tagsParam, ",")
+			for _, tagStr := range tagStrings {
+				if tagID, err := uuid.Parse(strings.TrimSpace(tagStr)); err == nil {
+					filterTagIDs = append(filterTagIDs, tagID)
+				}
+			}
+		}
+
+		tasks, err := s.GetTasksWithTags(projectID, filterTagIDs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get tasks"})
 			return
