@@ -44,6 +44,7 @@ type Task struct {
 	CreatedBy   uuid.UUID  `json:"created_by" db:"created_by"`
 	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+	Tags        []Tag      `json:"tags,omitempty" db:"-"`
 }
 
 type Constant struct {
@@ -171,4 +172,38 @@ type CreateCommentRequest struct {
 
 type UpdateCommentRequest struct {
 	Content string `json:"content" binding:"required,min=1,max=2000"`
+}
+
+type Tag struct {
+	ID        uuid.UUID `json:"id" db:"id"`
+	ProjectID uuid.UUID `json:"project_id" db:"project_id"`
+	Name      string    `json:"name" db:"name"`
+	Color     string    `json:"color" db:"color"`
+	CreatedBy uuid.UUID `json:"created_by" db:"created_by"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type TaskTag struct {
+	TaskID    uuid.UUID `json:"task_id" db:"task_id"`
+	TagID     uuid.UUID `json:"tag_id" db:"tag_id"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type TagWithCount struct {
+	Tag
+	TaskCount int `json:"task_count" db:"task_count"`
+}
+
+type CreateTagRequest struct {
+	Name  string `json:"name" binding:"required,min=1,max=50"`
+	Color string `json:"color" binding:"required,len=7"`
+}
+
+type UpdateTagRequest struct {
+	Name  string `json:"name" binding:"omitempty,min=1,max=50"`
+	Color string `json:"color" binding:"omitempty,len=7"`
+}
+
+type AddTagToTaskRequest struct {
+	TagID string `json:"tag_id" binding:"required"`
 }

@@ -4,6 +4,7 @@ import { projectsAPI } from '../api/client';
 import { Project, ProjectRole } from '../types';
 import ProjectMembers from '../components/ProjectMembers';
 import BoardList from '../components/BoardList';
+import TagManager from '../components/TagManager';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -129,8 +130,7 @@ export default function ProjectDetail() {
                             : '#95a5a6',
                       }}
                     >
-                      {myRole === 'owner' ? '' : myRole === 'admin' ? '' : ''} You are{' '}
-                      {myRole}
+                      You are {myRole}
                     </span>
                   </div>
                   <div style={styles.headerActions}>
@@ -162,6 +162,11 @@ export default function ProjectDetail() {
             projectId={id!}
             currentUserRole={myRole}
             onOwnershipTransferred={handleOwnershipTransferred}
+          />
+
+          <TagManager 
+            projectId={id!} 
+            currentUserRole={myRole} 
           />
           
           <BoardList projectId={id!} currentUserRole={myRole} />

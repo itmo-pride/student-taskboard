@@ -67,6 +67,19 @@ export interface Board {
   updated_at: string;
 }
 
+export interface Tag {
+  id: string;
+  project_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TagWithCount extends Tag {
+  task_count: number;
+}
+
 export const authAPI = {
   register: (email: string, password: string, name: string) =>
     apiClient.post('/auth/signup', { email, password, name }),
@@ -108,11 +121,32 @@ export const usersAPI = {
 };
 
 export const tasksAPI = {
-  getByProject: (projectId: string) => apiClient.get(`/projects/${projectId}/tasks`),
+  getByProject: (projectId: string, tagIds?: string[]) => {
+    const params = tagIds?.length ? `?tags=${tagIds.join(',')}` : '';
+    return apiClient.get(`/projects/${projectId}/tasks${params}`);
+  },
   getById: (id: string) => apiClient.get(`/tasks/${id}`),
   create: (projectId: string, data: any) => apiClient.post(`/projects/${projectId}/tasks`, data),
   update: (id: string, data: any) => apiClient.put(`/tasks/${id}`, data),
   delete: (id: string) => apiClient.delete(`/tasks/${id}`),
+};
+
+export const tagsAPI = {
+  getByProject: (projectId: string) => 
+    apiClient.get<TagWithCount[]>(`/projects/${projectId}/tags`),
+  create: (projectId: string, name: string, color: string) => 
+    apiClient.post<Tag>(`/projects/${projectId}/tags`, { name, color }),
+  update: (tagId: string, data: { name?: string; color?: string }) => 
+    apiClient.put<Tag>(`/tags/${tagId}`, data),
+  delete: (tagId: string) => 
+    apiClient.delete(`/tags/${tagId}`),
+  
+  getByTask: (taskId: string) => 
+    apiClient.get<Tag[]>(`/tasks/${taskId}/tags`),
+  addToTask: (taskId: string, tagId: string) => 
+    apiClient.post(`/tasks/${taskId}/tags`, { tag_id: tagId }),
+  removeFromTask: (taskId: string, tagId: string) => 
+    apiClient.delete(`/tasks/${taskId}/tags/${tagId}`),
 };
 
 export const constantsAPI = {

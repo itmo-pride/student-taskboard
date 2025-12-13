@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { tasksAPI, projectsAPI } from '../api/client';
-import { Task, ProjectMember, ProjectRole } from '../types';
+import { Task, ProjectMember, ProjectRole, Tag } from '../types';
 import DueDatePicker from '../components/DueDatePicker';
 import TaskComments from '../components/TaskComments';
+import TagBadge from '../components/TagBadge';
+import TaskTagSelector from '../components/TaskTagSelector';
+import TagFilter from '../components/TagFilter';
 
 export default function Tasks() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -23,6 +26,7 @@ export default function Tasks() {
   const [commentTaskTitle, setCommentTaskTitle] = useState<string>('');
 
   const [myRole, setMyRole] = useState<ProjectRole>('member');
+  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -30,7 +34,7 @@ export default function Tasks() {
     if (projectId) {
       loadData();
     }
-  }, [projectId]);
+  }, [projectId, filterTagIds]);
 
   const loadData = async () => {
     try {
@@ -38,7 +42,7 @@ export default function Tasks() {
       setError(null);
 
       const [tasksRes, membersRes, roleRes] = await Promise.all([
-        tasksAPI.getByProject(projectId!),
+        tasksAPI.getByProject(projectId!, filterTagIds.length > 0 ? filterTagIds : undefined),
         projectsAPI.getMembers(projectId!),
         projectsAPI.getMyRole(projectId!),
       ]);
@@ -225,16 +229,30 @@ export default function Tasks() {
             ...styles.roleBadge,
             backgroundColor: myRole === 'owner' ? '#f39c12' : myRole === 'admin' ? '#9b59b6' : '#95a5a6'
           }}>
-            {myRole === 'owner' ? '' : myRole === 'admin' ? '' : ''} {myRole}
+            {myRole}
           </span>
         </div>
         <div style={styles.headerRight}>
+          <TagFilter 
+            projectId={projectId!}
+            selectedTagIds={filterTagIds}
+            onFilterChange={setFilterTagIds}
+          />
           <span style={styles.memberCount}>{members.length} members</span>
           <button onClick={() => setShowForm(!showForm)} style={styles.button}>
             {showForm ? 'Cancel' : '+ New Task'}
           </button>
         </div>
       </div>
+
+      {filterTagIds.length > 0 && (
+        <div style={styles.filterInfo}>
+          Showing tasks with selected tags ({tasks.length} found)
+          <button onClick={() => setFilterTagIds([])} style={styles.clearFilterBtn}>
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {myRole === 'member' && (
         <div style={styles.roleHint}>
@@ -364,6 +382,7 @@ export default function Tasks() {
                       {task.title}
                       {isMine && (
                         <span style={styles.myTaskBadge} title="You created this task">
+                          ★
                         </span>
                       )}
                     </h3>
@@ -385,6 +404,15 @@ export default function Tasks() {
                   {task.description && (
                     <p style={styles.taskDescription}>{task.description}</p>
                   )}
+
+                  <div style={styles.tagsSection}>
+                    <TaskTagSelector
+                      taskId={task.id}
+                      projectId={projectId!}
+                      currentTags={task.tags || []}
+                      onTagsChange={loadData}
+                    />
+                  </div>
 
                   <div style={styles.creatorInfo}>
                     <span style={styles.creatorLabel}>Created by:</span>
@@ -556,6 +584,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '1rem',
+    flexWrap: 'wrap',
+    gap: '1rem',
   },
   roleBadge: {
     display: 'inline-block',
@@ -574,10 +604,30 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#2980b9',
     fontSize: '0.9rem',
   },
+  filterInfo: {
+    backgroundColor: '#fff3cd',
+    padding: '0.75rem 1rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    color: '#856404',
+    fontSize: '0.9rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  clearFilterBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#856404',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+  },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
     gap: '1rem',
+    flexWrap: 'wrap',
   },
   memberCount: {
     color: '#666',
@@ -686,6 +736,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   myTaskBadge: {
     fontSize: '0.8rem',
+    color: '#f39c12',
   },
   priorityBadge: {
     padding: '0.15rem 0.5rem',
@@ -700,6 +751,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#666',
     margin: '0.5rem 0',
     lineHeight: 1.4,
+  },
+  tagsSection: {
+    marginBottom: '0.5rem',
+    padding: '0.5rem',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
   },
   creatorInfo: {
     display: 'flex',
