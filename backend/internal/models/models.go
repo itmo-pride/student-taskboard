@@ -144,3 +144,31 @@ type CreateFormulaRequest struct {
 	Description string     `json:"description"`
 	ProjectID   *uuid.UUID `json:"project_id"`
 }
+
+type TaskComment struct {
+	ID        uuid.UUID `json:"id" db:"id"`
+	TaskID    uuid.UUID `json:"task_id" db:"task_id"`
+	UserID    uuid.UUID `json:"user_id" db:"user_id"`
+	Content   string    `json:"content" db:"content"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type TaskCommentWithUser struct {
+	ID        uuid.UUID `json:"id" db:"id"`
+	TaskID    uuid.UUID `json:"task_id" db:"task_id"`
+	UserID    uuid.UUID `json:"user_id" db:"user_id"`
+	Content   string    `json:"content" db:"content"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UserName  string    `json:"user_name" db:"user_name"`
+	UserEmail string    `json:"user_email" db:"user_email"`
+}
+
+type CreateCommentRequest struct {
+	Content string `json:"content" binding:"required,min=1,max=2000"`
+}
+
+type UpdateCommentRequest struct {
+	Content string `json:"content" binding:"required,min=1,max=2000"`
+}

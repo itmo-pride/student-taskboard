@@ -100,6 +100,11 @@ func setupRouter(cfg *config.Config, str *store.Store, hub *ws.Hub) *gin.Engine 
 			protected.PUT("/tasks/:id", handlers.UpdateTask(str))
 			protected.DELETE("/tasks/:id", handlers.DeleteTask(str))
 
+			protected.GET("/tasks/:id/comments", handlers.GetComments(str))
+			protected.POST("/tasks/:taskId/comments", handlers.CreateComment(str))
+			protected.PUT("/comments/:commentId", handlers.UpdateComment(str))
+			protected.DELETE("/comments/:commentId", handlers.DeleteComment(str))
+
 			protected.GET("/constants", handlers.GetConstants(str))
 			protected.POST("/constants", handlers.CreateConstant(str))
 			protected.GET("/constants/:id", handlers.GetConstant(str))
