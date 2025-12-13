@@ -2,20 +2,6 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-export interface ProjectMember {
-  id: string;
-  project_id: string;
-  user_id: string;
-  role: 'owner' | 'admin' | 'member';
-  joined_at: string;
-  user_name: string;
-  user_email: string;
-}
-
-export interface MyRoleResponse {
-  role: 'owner' | 'admin' | 'member';
-}
-
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
   headers: {
@@ -50,7 +36,37 @@ apiClient.interceptors.response.use(
 
 export default apiClient;
 
-// Auth API
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user_name: string;
+  user_email: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  user_name: string;
+  user_email: string;
+}
+
+export interface Board {
+  id: string;
+  project_id: string;
+  name: string;
+  data: any;
+  settings?: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export const authAPI = {
   register: (email: string, password: string, name: string) =>
     apiClient.post('/auth/signup', { email, password, name }),
@@ -59,7 +75,6 @@ export const authAPI = {
   getMe: () => apiClient.get('/me'),
 };
 
-// Projects API
 export const projectsAPI = {
   getAll: () => apiClient.get('/projects'),
   getById: (id: string) => apiClient.get(`/projects/${id}`),
@@ -75,16 +90,13 @@ export const projectsAPI = {
     apiClient.delete(`/projects/${projectId}/members/${userId}`),
   
   getMyRole: (projectId: string) => 
-    apiClient.get<MyRoleResponse>(`/projects/${projectId}/my-role`),
-  
+    apiClient.get<{ role: 'owner' | 'admin' | 'member' }>(`/projects/${projectId}/my-role`),
   updateMemberRole: (projectId: string, userId: string, role: 'admin' | 'member') =>
     apiClient.put(`/projects/${projectId}/members/${userId}/role`, { role }),
-  
   transferOwnership: (projectId: string, newOwnerId: string) =>
     apiClient.post(`/projects/${projectId}/transfer-ownership`, { new_owner_id: newOwnerId }),
 };
 
-// User API
 export const usersAPI = {
   search: (query: string, excludeProjectId?: string) => {
     const params = new URLSearchParams({ q: query });
@@ -95,7 +107,6 @@ export const usersAPI = {
   },
 };
 
-// Tasks API
 export const tasksAPI = {
   getByProject: (projectId: string) => apiClient.get(`/projects/${projectId}/tasks`),
   getById: (id: string) => apiClient.get(`/tasks/${id}`),
@@ -104,7 +115,6 @@ export const tasksAPI = {
   delete: (id: string) => apiClient.delete(`/tasks/${id}`),
 };
 
-// Constants API
 export const constantsAPI = {
   getAll: (params?: any) => apiClient.get('/constants', { params }),
   getById: (id: string) => apiClient.get(`/constants/${id}`),
@@ -113,7 +123,6 @@ export const constantsAPI = {
   delete: (id: string) => apiClient.delete(`/constants/${id}`),
 };
 
-// Formulas API
 export const formulasAPI = {
   getAll: (params?: any) => apiClient.get('/formulas', { params }),
   getById: (id: string) => apiClient.get(`/formulas/${id}`),
@@ -122,41 +131,16 @@ export const formulasAPI = {
   delete: (id: string) => apiClient.delete(`/formulas/${id}`),
 };
 
-// Boards API
-export interface Board {
-  id: string;
-  project_id: string;
-  name: string;
-  data: BoardData;
-  settings: BoardSettings;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BoardData {
-  objects: DrawObject[];
-  version: number;
-}
-
-export interface BoardSettings {
-  backgroundColor: string;
-}
-
-export interface DrawObject {
-  id: string;
-  type: 'path' | 'line' | 'rect' | 'circle' | 'text';
-  points?: { x: number; y: number }[];
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  radius?: number;
-  text?: string;
-  color: string;
-  lineWidth: number;
-  createdBy: string;
-  createdAt: string;
-}
+export const commentsAPI = {
+  getByTask: (taskId: string) => 
+    apiClient.get<TaskComment[]>(`/tasks/${taskId}/comments`),
+  create: (taskId: string, content: string) => 
+    apiClient.post<TaskComment>(`/tasks/${taskId}/comments`, { content }),
+  update: (commentId: string, content: string) => 
+    apiClient.put<TaskComment>(`/comments/${commentId}`, { content }),
+  delete: (commentId: string) => 
+    apiClient.delete(`/comments/${commentId}`),
+};
 
 export const boardsAPI = {
   getByProject: (projectId: string) => 
@@ -169,6 +153,4 @@ export const boardsAPI = {
     apiClient.put<Board>(`/boards/${boardId}`, { name }),
   delete: (boardId: string) => 
     apiClient.delete(`/boards/${boardId}`),
-  clear: (boardId: string) => 
-    apiClient.post(`/boards/${boardId}/clear`),
 };

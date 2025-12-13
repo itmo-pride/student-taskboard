@@ -138,7 +138,7 @@ export default function ProjectDetail() {
                       onClick={() => navigate(`/projects/${id}/tasks`)}
                       style={styles.tasksButton}
                     >
-                      📋 View Tasks
+                      View Tasks
                     </button>
                     {canEdit && (
                       <button onClick={() => setEditing(true)} style={styles.button}>

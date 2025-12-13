@@ -9,5 +9,3 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date) WHERE due_date IS NOT NULL;
-
-COMMENT ON COLUMN tasks.due_date IS 'Дедлайн задачи (NULL = без ограничения)';

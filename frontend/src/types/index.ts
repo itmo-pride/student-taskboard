@@ -22,6 +22,16 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: ProjectRole;
+  joined_at: string;
+  user_name: string;
+  user_email: string;
+}
+
 export interface Task {
   id: string;
   project_id: string;
@@ -61,12 +71,13 @@ export interface Formula {
   updated_at: string;
 }
 
-export interface ProjectMember {
+export interface TaskComment {
   id: string;
-  project_id: string;
+  task_id: string;
   user_id: string;
-  role: ProjectRole;
-  joined_at: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
   user_name: string;
   user_email: string;
 }
@@ -100,4 +111,8 @@ export interface CreateFormulaRequest {
   latex: string;
   description: string;
   project_id?: string;
+}
+
+export interface CreateCommentRequest {
+  content: string;
 }

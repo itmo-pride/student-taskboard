@@ -113,11 +113,11 @@ export default function ProjectMembers({ projectId, currentUserRole, onOwnership
   const getRoleBadgeStyle = (role: ProjectRole) => {
     switch (role) {
       case 'owner':
-        return { backgroundColor: '#f39c12', icon: '👑' };
+        return { backgroundColor: '#f39c12', icon: '' };
       case 'admin':
-        return { backgroundColor: '#9b59b6', icon: '⚡' };
+        return { backgroundColor: '#9b59b6', icon: '' };
       default:
-        return { backgroundColor: '#95a5a6', icon: '👤' };
+        return { backgroundColor: '#95a5a6', icon: '' };
     }
   };
 
@@ -127,7 +127,7 @@ export default function ProjectMembers({ projectId, currentUserRole, onOwnership
     <div style={styles.container}>
       <div style={styles.header}>
         <h3 style={styles.title}>
-          👥 Team Members ({members.length})
+           Team Members ({members.length})
         </h3>
         {canManageMembers && (
           <button 
@@ -141,13 +141,13 @@ export default function ProjectMembers({ projectId, currentUserRole, onOwnership
 
       <div style={styles.legend}>
         <span style={styles.legendItem}>
-          <span style={{...styles.legendBadge, backgroundColor: '#f39c12'}}>👑 Owner</span>
+          <span style={{...styles.legendBadge, backgroundColor: '#f39c12'}}>Owner</span>
         </span>
         <span style={styles.legendItem}>
-          <span style={{...styles.legendBadge, backgroundColor: '#9b59b6'}}>⚡ Admin</span>
+          <span style={{...styles.legendBadge, backgroundColor: '#9b59b6'}}>Admin</span>
         </span>
         <span style={styles.legendItem}>
-          <span style={{...styles.legendBadge, backgroundColor: '#95a5a6'}}>👤 Member</span>
+          <span style={{...styles.legendBadge, backgroundColor: '#95a5a6'}}>Member</span>
         </span>
       </div>
 

@@ -19,7 +19,6 @@ type Hub struct {
 	mu         sync.RWMutex
 	store      *store.Store
 
-	// Буфер для batch-сохранения
 	saveQueue map[string][]models.DrawObject
 	saveMu    sync.Mutex
 }
@@ -41,7 +40,6 @@ func NewHub(s *store.Store) *Hub {
 		saveQueue:  make(map[string][]models.DrawObject),
 	}
 
-	// Запускаем периодическое сохранение
 	go h.periodicSave()
 
 	return h
@@ -61,7 +59,6 @@ func (h *Hub) Run() {
 
 			log.Printf("Client %s joined board %s (total: %d)", client.userID, client.boardID, clientCount)
 
-			// Отправляем текущее состояние доски новому клиенту
 			go h.sendBoardState(client)
 
 		case client := <-h.unregister:
@@ -84,28 +81,21 @@ func (h *Hub) Run() {
 	}
 }
 
-// handleMessage обрабатывает входящие сообщения
 func (h *Hub) handleMessage(message *Message) {
 	switch message.Type {
 	case "draw":
-		// Сохраняем объект и рассылаем всем
 		h.handleDraw(message)
 	case "delete":
 		h.handleDelete(message)
 	case "clear":
 		h.handleClear(message)
 	case "sync_request":
-		// Клиент запрашивает полное состояние
-		// Ничего не делаем здесь, состояние отправляется при подключении
 	default:
-		// Просто рассылаем всем остальным
 		h.broadcastToOthers(message)
 	}
 }
 
-// handleDraw обрабатывает событие рисования
 func (h *Hub) handleDraw(message *Message) {
-	// Парсим объект
 	payloadBytes, err := json.Marshal(message.Payload)
 	if err != nil {
 		log.Printf("Failed to marshal draw payload: %v", err)
@@ -120,16 +110,13 @@ func (h *Hub) handleDraw(message *Message) {
 		return
 	}
 
-	// Добавляем в очередь на сохранение
 	h.saveMu.Lock()
 	h.saveQueue[message.BoardID] = append(h.saveQueue[message.BoardID], payload.Object)
 	h.saveMu.Unlock()
 
-	// Рассылаем всем клиентам
 	h.broadcastToAll(message)
 }
 
-// handleDelete обрабатывает удаление объекта
 func (h *Hub) handleDelete(message *Message) {
 	payloadBytes, err := json.Marshal(message.Payload)
 	if err != nil {
@@ -148,37 +135,30 @@ func (h *Hub) handleDelete(message *Message) {
 		return
 	}
 
-	// Удаляем из БД
 	if err := h.store.RemoveObjectFromBoard(boardUUID, payload.ObjectID); err != nil {
 		log.Printf("Failed to remove object from board: %v", err)
 	}
 
-	// Рассылаем всем
 	h.broadcastToAll(message)
 }
 
-// handleClear очищает доску
 func (h *Hub) handleClear(message *Message) {
 	boardUUID, err := uuid.Parse(message.BoardID)
 	if err != nil {
 		return
 	}
 
-	// Очищаем в БД
 	if err := h.store.ClearBoard(boardUUID); err != nil {
 		log.Printf("Failed to clear board: %v", err)
 	}
 
-	// Очищаем очередь сохранения
 	h.saveMu.Lock()
 	delete(h.saveQueue, message.BoardID)
 	h.saveMu.Unlock()
 
-	// Рассылаем всем
 	h.broadcastToAll(message)
 }
 
-// broadcastToAll рассылает сообщение всем клиентам на доске
 func (h *Hub) broadcastToAll(message *Message) {
 	h.mu.RLock()
 	clients, ok := h.boards[message.BoardID]
@@ -200,7 +180,6 @@ func (h *Hub) broadcastToAll(message *Message) {
 	}
 }
 
-// broadcastToOthers рассылает сообщение всем кроме отправителя
 func (h *Hub) broadcastToOthers(message *Message) {
 	h.mu.RLock()
 	clients, ok := h.boards[message.BoardID]
@@ -225,7 +204,6 @@ func (h *Hub) broadcastToOthers(message *Message) {
 	}
 }
 
-// sendBoardState отправляет текущее состояние доски клиенту
 func (h *Hub) sendBoardState(client *Client) {
 	boardUUID, err := uuid.Parse(client.boardID)
 	if err != nil {
@@ -259,7 +237,6 @@ func (h *Hub) sendBoardState(client *Client) {
 	}
 }
 
-// periodicSave периодически сохраняет объекты из очереди в БД
 func (h *Hub) periodicSave() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -289,7 +266,6 @@ func (h *Hub) periodicSave() {
 	}
 }
 
-// GetOnlineCount возвращает количество клиентов на доске
 func (h *Hub) GetOnlineCount(boardID string) int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

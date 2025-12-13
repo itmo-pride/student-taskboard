@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { tasksAPI, projectsAPI } from '../api/client';
 import { Task, ProjectMember, ProjectRole } from '../types';
 import DueDatePicker from '../components/DueDatePicker';
+import TaskComments from '../components/TaskComments';
 
 export default function Tasks() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -18,6 +19,8 @@ export default function Tasks() {
   const [priority, setPriority] = useState('medium');
   const [assignedTo, setAssignedTo] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
+  const [commentTaskId, setCommentTaskId] = useState<string | null>(null);
+  const [commentTaskTitle, setCommentTaskTitle] = useState<string>('');
 
   const [myRole, setMyRole] = useState<ProjectRole>('member');
 
@@ -56,6 +59,11 @@ export default function Tasks() {
       return true;
     }
     return task.created_by === currentUser.id;
+  };
+
+  const openComments = (task: Task) => {
+    setCommentTaskId(task.id);
+    setCommentTaskTitle(task.title);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -221,7 +229,7 @@ export default function Tasks() {
           </span>
         </div>
         <div style={styles.headerRight}>
-          <span style={styles.memberCount}>👥 {members.length} members</span>
+          <span style={styles.memberCount}>{members.length} members</span>
           <button onClick={() => setShowForm(!showForm)} style={styles.button}>
             {showForm ? 'Cancel' : '+ New Task'}
           </button>
@@ -434,6 +442,14 @@ export default function Tasks() {
                   )}
 
                   <div style={styles.taskActions}>
+                    <button
+                      onClick={() => openComments(task)}
+                      style={styles.commentButton}
+                      title="Comments"
+                    >
+                      💬
+                    </button>
+                    
                     {statusKey !== 'todo' && (
                       <button
                         onClick={() =>
@@ -486,6 +502,15 @@ export default function Tasks() {
           </div>
         ))}
       </div>
+
+      {commentTaskId && (
+        <TaskComments
+          taskId={commentTaskId}
+          isOpen={!!commentTaskId}
+          onClose={() => setCommentTaskId(null)}
+          taskTitle={commentTaskTitle}
+        />
+      )}
     </div>
   );
 }
@@ -770,6 +795,15 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '0.75rem',
     paddingTop: '0.75rem',
     borderTop: '1px solid #eee',
+  },
+  commentButton: {
+    padding: '0.35rem 0.6rem',
+    backgroundColor: '#9b59b6',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
   },
   moveButton: {
     padding: '0.35rem 0.6rem',
