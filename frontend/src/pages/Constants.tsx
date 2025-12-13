@@ -211,13 +211,8 @@ export default function Constants() {
           <div key={constant.id} style={styles.card}>
             <div style={styles.cardHeader}>
               <h3 style={styles.cardTitle}>{constant.name}</h3>
-              <span
-                style={{
-                  ...styles.scopeBadge,
-                  backgroundColor: constant.scope === 'global' ? '#27ae60' : '#95a5a6',
-                }}
-              >
-                {constant.scope}
+              <span>
+                {}
               </span>
             </div>
 

@@ -64,7 +64,7 @@ export default function BoardList({ projectId, currentUserRole }: Props) {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h3 style={styles.title}>🎨 Whiteboards ({boards.length})</h3>
+        <h3 style={styles.title}> Whiteboards ({boards.length})</h3>
         <button onClick={() => setShowForm(!showForm)} style={styles.addButton}>
           {showForm ? 'Cancel' : '+ New Board'}
         </button>
