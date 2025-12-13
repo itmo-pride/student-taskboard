@@ -62,7 +62,7 @@ func CreateComment(s *store.Store) gin.HandlerFunc {
 			return
 		}
 
-		taskID, err := uuid.Parse(c.Param("taskId"))
+		taskID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
 			return
